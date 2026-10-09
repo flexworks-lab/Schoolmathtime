@@ -102,7 +102,7 @@ function navigate(value) {
     (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
   const destination = isUrl
     ? query
-    : "https://www.google.com/search?q=" + encodeURIComponent(query);
+    : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
   window.location.assign("/browse?url=" + encodeURIComponent(destination));
 }
 
