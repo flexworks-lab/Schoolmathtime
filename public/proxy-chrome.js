@@ -59,9 +59,12 @@
     const raw = address ? address.value.trim() : "";
     if (!raw) return;
     event.preventDefault();
-    // Send URLs and search phrases to /browse. The proxy converts plain
-    // text into a Google Search URL before fetching the remote page.
-    window.location.assign("/browse?url=" + encodeURIComponent(raw));
+    const isUrl = raw.startsWith("https://") || raw.startsWith("http://") ||
+      (!raw.split("").some((character) => character.charCodeAt(0) <= 32) && raw.includes("."));
+    const destination = isUrl
+      ? raw
+      : "https://www.google.com/search?q=" + encodeURIComponent(raw);
+    window.location.assign("/browse?url=" + encodeURIComponent(destination));
   });
 
   find("stm-back")?.addEventListener("click", () => window.history.back());
