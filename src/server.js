@@ -519,6 +519,32 @@ app.get("/api/session", (req, res) => {
   res.json({ authenticated: req.session?.authenticated === true, allowedHosts: req.session?.authenticated === true ? ALLOWED_HOSTS.filter((host) => host !== "*") : [], browseAllPublicDomains: req.session?.authenticated === true && ALLOWED_HOSTS.includes("*") });
 });
 
+app.get("/search", requireLogin, fetchLimiter, (req, res) => {
+  const query = String(req.query.q || "").trim().slice(0, 300);
+  const cseId = String(process.env.GOOGLE_CSE_ID || "").trim();
+  const safeQuery = escapeAttribute(query);
+  const safeCseId = /^[a-zA-Z0-9:_-]{5,120}$/.test(cseId) ? cseId : "";
+  const searchWidget = safeCseId
+    ? '<script async src="https://cse.google.com/cse.js?cx=' + encodeURIComponent(safeCseId) + '"></script><div class="gcse-searchresults-only" data-queryparametername="q"></div>'
+    : '<div class="search-setup"><h2>Google Search is not connected yet</h2><p>To show Google results inside Schoolmathtime, add your Google Programmable Search Engine ID as the <code>GOOGLE_CSE_ID</code> environment variable in Render.</p><p>Create an engine at <a href="https://programmablesearchengine.google.com/" target="_blank" rel="noreferrer noopener">Google Programmable Search Engine</a>, enable searching the entire web, then copy its Search engine ID.</p></div>';
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
+    (safeQuery ? safeQuery + ' — Google results — Schoolmathtime' : 'Google Search — Schoolmathtime') +
+    '</title><link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><link rel="stylesheet" href="/search.css?v=google-cse-1"><script src="/proxy-chrome.js?v=google-search-fix-1" defer></script><script src="/search-results.js?v=google-cse-1" defer></script></head><body style="margin:0;background:#17181b;color:#e8eaed;font-family:Arial,Helvetica,sans-serif">' +
+    '<div id="stm-browser-chrome" role="region" aria-label="Schoolmathtime browser controls">' +
+      '<div class="stm-tab-strip"><span class="stm-mini-logo" aria-hidden="true">S</span><div class="stm-tab"><span class="stm-tab-icon" aria-hidden="true">G</span><span class="stm-tab-title">' + (safeQuery || 'Google Search') + '</span><button id="stm-close-tab" class="stm-tab-close" type="button" aria-label="Close tab" title="Close tab">×</button></div><button id="stm-new-tab" class="stm-new-tab" type="button" aria-label="Open new tab" title="New tab">+</button><div class="stm-window-actions" aria-hidden="true"><span class="stm-window-action"></span><span class="stm-window-action square"></span><span class="stm-window-action close"></span></div></div>' +
+      '<div class="stm-toolbar-row"><div class="stm-controls"><button id="stm-back" class="stm-control" type="button" title="Back" aria-label="Back">←</button><button id="stm-forward" class="stm-control" type="button" title="Forward" aria-label="Forward">→</button><button id="stm-refresh" class="stm-control" type="button" title="Reload" aria-label="Reload">↻</button><a class="stm-control home" href="/" title="Home" aria-label="Home">⌂</a></div><form id="stm-address-form" class="stm-address-form" action="/search" method="get" role="search"><span class="stm-address-security" aria-hidden="true">◈</span><input id="stm-address" name="q" value="' + safeQuery + '" aria-label="Search Google or enter an address" spellcheck="false" autocomplete="url"><button class="stm-address-go" type="submit">Search ↵</button></form><button id="stm-bookmark" class="stm-control" type="button" title="Bookmark page" aria-label="Bookmark page">☆</button><button id="stm-menu" class="stm-control" type="button" title="Browser information" aria-label="Browser information">⋮</button></div><div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div></div>' +
+    '<main class="search-page"><div class="search-heading"><span class="search-google-mark">G</span><div><div class="search-label">GOOGLE SEARCH</div><h1>' + (safeQuery || 'Search the web') + '</h1><p>Results stay inside your Schoolmathtime window.</p></div></div><section class="search-results">' + searchWidget + '</section></main>' +
+    '</body></html>';
+  res.set({
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'self' data: https:; script-src 'self' https://cse.google.com https://www.google.com https://www.gstatic.com https://www.googleapis.com; connect-src 'self' https://cse.google.com https://www.google.com https://www.googleapis.com; frame-src https://www.google.com https://www.googleusercontent.com https://cse.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+  });
+  res.status(200).send(html);
+});
+
 app.post("/logout", (req, res) => {
   req.session.destroy(() => {
     res.clearCookie("schoolmathtime.sid", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production" });
