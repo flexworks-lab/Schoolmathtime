@@ -166,6 +166,67 @@ function normalizeInput(input) {
   return "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(value);
 }
 
+function getYouTubeVideoInfo(input) {
+  let url;
+  try { url = new URL(input); } catch { return null; }
+  if (url.protocol !== "https:") return null;
+  const host = url.hostname.toLowerCase();
+  const isYouTube = host === "youtu.be" || host === "youtube.com" ||
+    host.endsWith(".youtube.com") || host === "youtube-nocookie.com" ||
+    host.endsWith(".youtube-nocookie.com");
+  if (!isYouTube) return null;
+
+  let id = "";
+  let isShort = false;
+  if (host === "youtu.be") {
+    id = url.pathname.split("/").filter(Boolean)[0] || "";
+  } else if (url.pathname === "/watch") {
+    id = url.searchParams.get("v") || "";
+  } else {
+    const match = url.pathname.match(/^\/(shorts|live|embed)\/([A-Za-z0-9_-]{6,20})(?:\/|$)/);
+    if (match) {
+      id = match[2];
+      isShort = match[1] === "shorts";
+    }
+  }
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) return null;
+  return { id, isShort };
+}
+
+function createYouTubePlayerDocument(info) {
+  const id = info.id;
+  const ratio = info.isShort ? "9 / 16" : "16 / 9";
+  const maxWidth = info.isShort ? "430px" : "1200px";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YouTube video</title><style>
+    html,body{margin:0;min-height:100%;background:#0f0f0f;color:#f1f1f1;font-family:Arial,Helvetica,sans-serif}
+    .stm-yt-shell{width:100%;max-width:1280px;margin:0 auto;padding:clamp(12px,3vw,32px)}
+    .stm-yt-heading{margin:0 0 16px;font-size:clamp(18px,2vw,24px);font-weight:600}
+    .stm-yt-player{width:100%;max-width:${maxWidth};aspect-ratio:${ratio};margin:0 auto;background:#000;border-radius:12px;overflow:hidden}
+    .stm-yt-player iframe{display:block;width:100%;height:100%;border:0}
+    .stm-yt-note{max-width:${maxWidth};margin:14px auto 0;color:#aaa;font-size:13px;line-height:1.5}
+    @media(max-width:600px){.stm-yt-shell{padding:12px}.stm-yt-player{border-radius:8px}}
+  </style></head><body><main class="stm-yt-shell"><h1 class="stm-yt-heading">YouTube video</h1><div class="stm-yt-player"><iframe src="https://www.youtube.com/embed/${id}?playsinline=1&rel=0" title="YouTube video player" loading="eager" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="stm-yt-note">Video playback is provided by YouTube. Some videos may require YouTube sign-in, age verification, or permission to embed.</p></main></body></html>`;
+}
+
+function isSupportedMediaFrame(target) {
+  const host = target.hostname.toLowerCase().replace(/\.$/, "");
+  const path = target.pathname;
+  if ((host === "youtube.com" || host.endsWith(".youtube.com")) && /^\/(?:embed|live)\//.test(path)) return true;
+  if ((host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")) && path.startsWith("/embed/")) return true;
+  if (host === "player.vimeo.com" && path.startsWith("/video/")) return true;
+  if (host === "open.spotify.com" && path.startsWith("/embed/")) return true;
+  if (host === "w.soundcloud.com" && path === "/player/") return true;
+  if ((host === "www.dailymotion.com" && path.startsWith("/embed/")) ||
+      (host === "geo.dailymotion.com" && path.startsWith("/player/"))) return true;
+  if (host === "player.twitch.tv" && (target.searchParams.has("video") || target.searchParams.has("channel") || target.searchParams.has("collection"))) return true;
+  if (host === "clips.twitch.tv" && path.startsWith("/embed")) return true;
+  if (host === "www.loom.com" && path.startsWith("/embed/")) return true;
+  if (host === "www.tiktok.com" && path.startsWith("/embed/")) return true;
+  if (host === "www.facebook.com" && path === "/plugins/video.php") return true;
+  if (host === "player.bilibili.com" && path === "/player.html") return true;
+  return false;
+}
+
 async function collectLimited(body, maxBytes) {
   const chunks = [];
   let size = 0;
@@ -345,7 +406,7 @@ function rewriteCss(css, sourceUrl) {
 
 function proxyDocument(remoteHtml, sourceUrl, origin) {
   const $ = cheerio.load(remoteHtml);
-  $("noscript, iframe, frame, frameset, object, embed, applet, base, portal").remove();
+  $("noscript, frame, frameset, object, embed, applet, base, portal").remove();
   $("meta[http-equiv]").remove();
   $("link[rel='modulepreload'], link[rel='preload'], link[rel='prefetch'], link[rel='prerender']").remove();
   $("*").each((_, element) => {
@@ -363,7 +424,24 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
         continue;
       }
       if (lower === "srcset") {
-        node.removeAttr(name);
+        // Preserve responsive image candidates; cross-origin HTTPS images are
+        // explicitly allowed by the proxied page's CSP.
+        continue;
+      }
+
+      if (lower === "src" && element.tagName === "iframe") {
+        try {
+          const frameUrl = new URL(value, sourceUrl);
+          if (frameUrl.protocol !== "https:" || !isAllowedHost(frameUrl.hostname) || !isSupportedMediaFrame(frameUrl)) {
+            node.remove();
+            continue;
+          }
+          node.attr(name, frameUrl.toString());
+          node.attr("loading", "lazy");
+          node.attr("referrerpolicy", "strict-origin-when-cross-origin");
+          node.attr("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+          node.attr("allowfullscreen", "");
+        } catch { node.remove(); }
         continue;
       }
       if (lower === "href") {
@@ -426,16 +504,6 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     $("head").append('<script>(function(){document.addEventListener("submit",function(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();var target=new URL("https://www.google.com/search");target.searchParams.set("gbv","1");target.searchParams.set("q",query);["tbm","hl","safe","num","start","udm"].forEach(function(name){var option=Array.prototype.find.call(form.elements,function(el){return el.name===name});if(option&&option.value)target.searchParams.set(name,option.value)});window.location.assign("/browse?url="+encodeURIComponent(target.toString()))},true)})();</script>');
   }
   const toolbar = `<div id="stm-browser-chrome" role="region" aria-label="Schoolmathtime browser controls">
-    <div class="stm-tab-strip">
-      <span class="stm-mini-logo" aria-hidden="true">S</span>
-      <div class="stm-tab">
-        <span class="stm-tab-icon" aria-hidden="true">S</span>
-        <span class="stm-tab-title">${hostLabel}</span>
-        <button id="stm-close-tab" class="stm-tab-close" type="button" aria-label="Close tab" title="Close tab">×</button>
-      </div>
-      <button id="stm-new-tab" class="stm-new-tab" type="button" aria-label="Open new tab" title="New tab">+</button>
-      <div class="stm-window-actions" aria-hidden="true"><span class="stm-window-action"></span><span class="stm-window-action square"></span><span class="stm-window-action close"></span></div>
-    </div>
     <div class="stm-toolbar-row">
       <div class="stm-controls">
         <button id="stm-back" class="stm-control" type="button" title="Back" aria-label="Back">←</button>
@@ -453,7 +521,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><link rel="stylesheet" href="/proxy-fit.css?v=toolbar-offset-2"><script src="/proxy-chrome.js?v=google-search-form-fix-3" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=toolbar-offset-2"><script src="/proxy-chrome.js?v=no-tabs-media-1" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("body").addClass("stm-proxied-page");
