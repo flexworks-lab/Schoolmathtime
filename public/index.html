@@ -7,7 +7,7 @@
   <meta name="description" content="Schoolmathtime — your web browsing space.">
   <title>Schoolmathtime</title>
   <link rel="stylesheet" href="/styles.css?v=browser-ui-1">
-  <script src="/app.js?v=browser-ui-1" defer></script>
+  <script src="/app.js?v=google-search-1" defer></script>
 </head>
 <body>
   <main class="browser-window">
@@ -36,7 +36,7 @@
         <form id="addressForm" class="address-form" role="search">
           <span class="address-security" title="Schoolmathtime protected gateway" aria-hidden="true">◈</span>
           <label class="sr-only" for="browserAddress">Search or enter an address</label>
-          <input id="browserAddress" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search or enter a URL">
+          <input id="browserAddress" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search Google or enter a URL">
           <button class="address-go" type="submit">Go <span aria-hidden="true">↵</span></button>
         </form>
         <button id="bookmarkButton" class="chrome-icon-button bookmark-button" type="button" title="Bookmark this page" aria-label="Bookmark this page">☆</button>
@@ -55,7 +55,7 @@
         <section class="login-card">
           <div class="card-kicker"><span class="status-dot"></span> PRIVATE BROWSING SESSION</div>
           <h1 id="welcomeTitle">Welcome back.</h1>
-          <p class="card-description">Enter your access key to start browsing approved websites.</p>
+          <p class="card-description">Enter your access key to start browsing.</p>
           <form id="loginForm" class="access-form">
             <label for="accessKey">Access key</label>
             <div class="login-input-row">
@@ -76,7 +76,7 @@
           <form id="browseForm" class="home-search-form" role="search">
             <label class="sr-only" for="targetInput">Search or enter a website</label>
             <span class="home-search-icon" aria-hidden="true">⌕</span>
-            <input id="targetInput" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search the web or enter a URL…">
+            <input id="targetInput" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search Google or enter a URL…">
             <button id="clearSearchButton" class="clear-search-button" type="button" aria-label="Clear search">×</button>
             <button class="search-submit" type="submit" aria-label="Go">→</button>
           </form>
