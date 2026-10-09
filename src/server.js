@@ -611,6 +611,16 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
   if (/(^|\.)google\.com$/i.test(source.hostname) && source.pathname.startsWith("/search")) {
     $("head").append('<script>(function(){document.addEventListener("submit",function(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();var target=new URL("https://www.google.com/search");target.searchParams.set("gbv","1");target.searchParams.set("q",query);["tbm","hl","safe","num","start","udm"].forEach(function(name){var option=Array.prototype.find.call(form.elements,function(el){return el.name===name});if(option&&option.value)target.searchParams.set(name,option.value)});window.location.assign("/browse?url="+encodeURIComponent(target.toString()))},true)})();</script>');
   }
+  // Route origin-relative searches through the proxy because upstream form actions
+  // are stripped for safety before this handler is injected.
+  if (/(^|\\.)youtube\\.com$/i.test(source.hostname)) {
+    $("head").append('<script>(function(){function go(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=search_query],input#search");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();event.stopImmediatePropagation();var target=new URL("https://www.youtube.com/results");target.searchParams.set("search_query",query);window.location.assign("/browse?url="+encodeURIComponent(target.toString()))}document.addEventListener("submit",go,true);document.addEventListener("keydown",function(event){if(event.key!=="Enter")return;var field=event.target;if(!field||!field.matches||!field.matches("input[name=search_query],input#search")||!field.form)return;go({target:field.form,preventDefault:function(){event.preventDefault()},stopImmediatePropagation:function(){event.stopImmediatePropagation()}})},true)})();</script>');
+  }
+
+  if (/(^|\\.)tiktok\\.com$/i.test(source.hostname)) {
+    $("head").append('<script>(function(){function go(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q],input[name=keyword],input[data-e2e=search-user-input],input[placeholder*=Search]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();event.stopImmediatePropagation();var target=new URL("https://www.tiktok.com/search");target.searchParams.set("q",query);window.location.assign("/browse?url="+encodeURIComponent(target.toString()))}document.addEventListener("submit",go,true);document.addEventListener("keydown",function(event){if(event.key!=="Enter")return;var field=event.target;if(!field||!field.matches||!field.matches("input[name=q],input[name=keyword],input[data-e2e=search-user-input],input[placeholder*=Search]")||!field.form)return;go({target:field.form,preventDefault:function(){event.preventDefault()},stopImmediatePropagation:function(){event.stopImmediatePropagation()}})},true)})();</script>');
+  }
+
   const toolbar = `<div id="stm-browser-chrome" role="region" aria-label="Schoolmathtime browser controls">
     <div class="stm-toolbar-row">
       <div class="stm-controls">
@@ -681,13 +691,28 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     // Plain text is normalized to https://www.google.com/search?q=...;
     // then fetched and rendered through the same Schoolmathtime proxy as URLs.
     const target = normalizeInput(rawInput);
+    // TikTok's desktop landing page is more reliable at /foryou than the bare
+    // root when fetched server-side. Change only the bare homepage; preserve
+    // every supplied profile and video URL.
+    let fetchTarget = target;
+    try {
+      const parsed = new URL(target);
+      const host = parsed.hostname.toLowerCase();
+      const isTikTok = host === "tiktok.com" || host.endsWith(".tiktok.com");
+      if (isTikTok && parsed.pathname === "/" && !parsed.search) {
+        parsed.hostname = "www.tiktok.com";
+        parsed.pathname = "/foryou";
+        parsed.searchParams.set("lang", "en");
+        fetchTarget = parsed.toString();
+      }
+    } catch {}
     let html;
     const youtubeInfo = getYouTubeVideoInfo(target);
     if (youtubeInfo) {
       // YouTube's app uses origin/browser APIs that do not survive HTML rewriting.
       html = proxyDocument(createYouTubePlayerDocument(youtubeInfo), target, "");
     } else {
-      const result = await fetchApproved(target, MAX_PAGE_BYTES);
+      const result = await fetchApproved(fetchTarget, MAX_PAGE_BYTES);
       if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
         return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
       }
