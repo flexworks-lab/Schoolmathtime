@@ -667,7 +667,7 @@ app.get("/search", allowPublicBrowsing, (req, res) => {
   return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
 });
 
-app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
+app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
   try {
     const rawInput = String(req.query.url || "").trim();
     if (!rawInput) throw new Error("Enter a URL or search phrase.");
@@ -700,7 +700,7 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
   }
 });
 
-app.all("/media", requireLogin, fetchLimiter, async (req, res) => {
+app.all("/media", allowPublicBrowsing, fetchLimiter, async (req, res) => {
   if (!["GET", "HEAD"].includes(req.method)) return res.status(405).set("Allow", "GET, HEAD").end();
   try {
     const input = String(req.query.url || "");
@@ -712,7 +712,7 @@ app.all("/media", requireLogin, fetchLimiter, async (req, res) => {
   }
 });
 
-app.get("/resource", requireLogin, fetchLimiter, async (req, res) => {
+app.get("/resource", allowPublicBrowsing, fetchLimiter, async (req, res) => {
   try {
     const result = await fetchApproved(String(req.query.url || ""), MAX_RESOURCE_BYTES);
     const type = result.contentType.split(";")[0].trim();
