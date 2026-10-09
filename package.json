@@ -10,7 +10,7 @@
     "check": "node --check src/server.js && node --check public/app.js"
   },
   "engines": {
-    "node": ">=20.18.0"
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "cheerio": "1.0.0",
