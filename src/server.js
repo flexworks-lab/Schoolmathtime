@@ -3,11 +3,9 @@
 const path = require("node:path");
 const dns = require("node:dns").promises;
 const net = require("node:net");
-const crypto = require("node:crypto");
 const https = require("node:https");
 const upstreamAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60_000 });
 const express = require("express");
-const session = require("express-session");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cheerio = require("cheerio");
@@ -15,8 +13,6 @@ const ipaddr = require("ipaddr.js");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const ACCESS_KEY = process.env.PROXY_ACCESS_KEY || "";
-const SESSION_SECRET = process.env.SESSION_SECRET || "";
 const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 const MAX_RESOURCE_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10000;
@@ -36,14 +32,6 @@ function parseAllowedHosts(value) {
 
 const ALLOWED_HOSTS = parseAllowedHosts(process.env.ALLOWED_HOSTS);
 
-if (!ACCESS_KEY || ACCESS_KEY.length < 16) {
-  console.error("Configuration error: set PROXY_ACCESS_KEY to a value at least 16 characters long.");
-  process.exit(1);
-}
-if (!SESSION_SECRET || SESSION_SECRET.length < 32) {
-  console.error("Configuration error: set SESSION_SECRET to a random value at least 32 characters long.");
-  process.exit(1);
-}
 if (!ALLOWED_HOSTS.length) {
   console.error("Configuration error: set ALLOWED_HOSTS to at least one approved hostname.");
   process.exit(1);
@@ -68,26 +56,6 @@ app.use(helmet({ contentSecurityPolicy: {
 }}));
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false, limit: "16kb" }));
-app.use(session({
-  name: "schoolmathtime.sid",
-  secret: SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 4 * 60 * 60 * 1000
-  }
-}));
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 12,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: { error: "Too many login attempts. Please wait and try again." }
-});
 const fetchLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 240,
@@ -96,12 +64,10 @@ const fetchLimiter = rateLimit({
   message: "Rate limit reached. Please wait a moment."
 });
 
-function requireLogin(req, res, next) {
-  if (req.session && req.session.authenticated === true) return next();
-  if (req.path.startsWith("/api/") || req.path === "/login") {
-    return res.status(401).json({ error: "Sign in with the site access key first." });
-  }
-  return res.redirect("/");
+function requireLogin(_req, _res, next) {
+  // Access keys are disabled by request. Public routes still retain the rate
+  // limit, HTTPS-only policy, public-IP DNS validation, and redirect checks.
+  return next();
 }
 
 function isAllowedHost(hostname) {
@@ -507,26 +473,13 @@ app.use(express.static(path.join(__dirname, "..", "public"), { index: "index.htm
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.post("/login", loginLimiter, (req, res, next) => {
-  const attempt = typeof req.body?.accessKey === "string" ? req.body.accessKey : "";
-  const correct = attempt.length <= 512 && crypto.timingSafeEqual(
-    Buffer.from(crypto.createHash("sha256").update(attempt).digest()),
-    Buffer.from(crypto.createHash("sha256").update(ACCESS_KEY).digest())
-  );
-  if (!correct) return res.status(401).json({ error: "That access key was not accepted." });
-  req.session.regenerate((error) => {
-    if (error) return next(error);
-    req.session.authenticated = true;
-    req.session.save((saveError) => {
-      if (saveError) return next(saveError);
-      res.json({ authenticated: true, allowedHosts: ALLOWED_HOSTS.filter((host) => host !== "*"), browseAllPublicDomains: ALLOWED_HOSTS.includes("*") });
-    });
-  });
-});
-
-app.get("/api/session", (req, res) => {
+app.get("/api/session", (_req, res) => {
   res.set("Cache-Control", "no-store");
-  res.json({ authenticated: req.session?.authenticated === true, allowedHosts: req.session?.authenticated === true ? ALLOWED_HOSTS.filter((host) => host !== "*") : [], browseAllPublicDomains: req.session?.authenticated === true && ALLOWED_HOSTS.includes("*") });
+  res.json({
+    authenticated: true,
+    allowedHosts: ALLOWED_HOSTS.filter((host) => host !== "*"),
+    browseAllPublicDomains: ALLOWED_HOSTS.includes("*")
+  });
 });
 
 app.get("/search", requireLogin, (req, res) => {
@@ -536,13 +489,6 @@ app.get("/search", requireLogin, (req, res) => {
   const target = "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
-});
-
-app.post("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie("schoolmathtime.sid", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production" });
-    res.status(204).end();
-  });
 });
 
 app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
