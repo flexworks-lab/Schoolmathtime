@@ -683,6 +683,24 @@ app.get("/search", allowPublicBrowsing, (req, res) => {
   return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
 });
 
+app.get("/watch", allowPublicBrowsing, (req, res) => {
+  // YouTube's client-side navigation can resolve /watch against Schoolmathtime's
+  // origin after its page has been proxied. Send that local route back through
+  // the proxy with the original video/query parameters intact.
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(req.query)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, String(item));
+    } else if (value != null) {
+      params.set(key, String(value));
+    }
+  }
+  if (!params.get("v")) return res.redirect(302, "/");
+  const target = "https://www.youtube.com/watch?" + params.toString();
+  res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
+});
+
 app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
   try {
     const rawInput = String(req.query.url || "").trim();
