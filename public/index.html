@@ -6,26 +6,12 @@
   <meta name="theme-color" content="#202124">
   <meta name="description" content="Schoolmathtime — your web browsing space.">
   <title>Schoolmathtime</title>
-  <link rel="stylesheet" href="/styles.css?v=js-support-1">
-  <script src="/app.js?v=google-basic-google-proxy-1" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=no-tabs-no-key-1">
+  <script src="/app.js?v=no-tabs-no-key-1" defer></script>
 </head>
 <body>
   <main class="browser-window">
     <header class="browser-chrome" aria-label="Browser controls">
-      <div class="tab-strip">
-        <div class="brand-mini" aria-hidden="true">S</div>
-        <div class="browser-tab active-tab">
-          <span class="tab-favicon">S</span>
-          <span id="tabTitle" class="tab-title">Schoolmathtime</span>
-          <button id="closeTabButton" class="tab-close" type="button" aria-label="Close tab">×</button>
-        </div>
-        <button id="newTabButton" class="new-tab-button" type="button" aria-label="Open a new tab" title="New tab">+</button>
-        <div class="window-actions" aria-hidden="true">
-          <span class="window-action minimize"></span>
-          <span class="window-action maximize"></span>
-          <span class="window-action close-window"></span>
-        </div>
-      </div>
       <div class="toolbar-row">
         <div class="navigation-controls">
           <button id="backButton" class="chrome-icon-button" type="button" title="Back" aria-label="Back">←</button>
@@ -34,7 +20,7 @@
           <a class="chrome-icon-button home-button" href="/" title="Home" aria-label="Home">⌂</a>
         </div>
         <form id="addressForm" class="address-form" role="search">
-          <span class="address-security" title="Schoolmathtime protected gateway" aria-hidden="true">◈</span>
+          <span class="address-security" title="Schoolmathtime proxy" aria-hidden="true">◈</span>
           <label class="sr-only" for="browserAddress">Search or enter an address</label>
           <input id="browserAddress" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search Google or enter a URL">
           <button class="address-go" type="submit">Go <span aria-hidden="true">↵</span></button>
@@ -46,29 +32,7 @@
     </header>
 
     <section class="browser-content">
-      <section id="loginPanel" class="start-page login-view" aria-labelledby="welcomeTitle">
-        <div class="start-brand">
-          <div class="large-brand-icon" aria-hidden="true">S</div>
-          <div class="brand-wordmark">schoolmathtime<span>.</span></div>
-          <p class="start-subtitle">Your own space on the web.</p>
-        </div>
-        <section class="login-card">
-          <div class="card-kicker"><span class="status-dot"></span> PRIVATE BROWSING SESSION</div>
-          <h1 id="welcomeTitle">Welcome back.</h1>
-          <p class="card-description">Enter your access key to start browsing.</p>
-          <form id="loginForm" class="access-form">
-            <label for="accessKey">Access key</label>
-            <div class="login-input-row">
-              <input id="accessKey" name="accessKey" type="password" autocomplete="current-password" placeholder="Your access key" required>
-              <button class="primary-button" type="submit">Unlock <span aria-hidden="true">↗</span></button>
-            </div>
-            <p id="loginMessage" class="message" role="status" aria-live="polite"></p>
-          </form>
-          <p class="security-note"><span aria-hidden="true">♧</span> Your session is protected by the site operator.</p>
-        </section>
-      </section>
-
-      <section id="appPanel" class="start-page home-view" aria-labelledby="appTitle" hidden>
+      <section id="appPanel" class="start-page home-view" aria-labelledby="appTitle">
         <div class="home-content">
           <div class="home-logo" aria-hidden="true"><span>S</span></div>
           <h1 id="appTitle">schoolmathtime<span>.</span></h1>
@@ -80,23 +44,22 @@
             <button id="clearSearchButton" class="clear-search-button" type="button" aria-label="Clear search">×</button>
             <button class="search-submit" type="submit" aria-label="Go">→</button>
           </form>
-          <p class="home-hint">Search Google and keep results here, or enter a website address to proxy it here.</p>
+          <p class="home-hint">Search Google or enter a website address. Pages, media, and supported video embeds open here.</p>
 
           <div class="bookmark-section">
             <div class="section-caption"><span>QUICK ACCESS</span><span class="caption-line"></span></div>
-            <div id="domainList" class="shortcut-grid"><span class="muted">Loading approved sites…</span></div>
+            <div id="domainList" class="shortcut-grid"><span class="muted">Loading websites…</span></div>
           </div>
           <div id="savedSection" class="bookmark-section saved-section" hidden>
             <div class="section-caption"><span>YOUR BOOKMARKS</span><span class="caption-line"></span></div>
             <div id="savedList" class="shortcut-grid"></div>
           </div>
-          <button id="logoutButton" class="signout-button" type="button">Sign out</button>
         </div>
       </section>
     </section>
     <footer class="browser-statusbar">
-      <span><span class="status-dot"></span> SCHOOLMATHTIME BROWSER</span>
-      <span>Approved sites only <span class="status-separator">·</span> JavaScript enabled · forms restricted</span>
+      <span><span class="status-dot"></span> SCHOOLMATHTIME</span>
+      <span>HTTPS browsing <span class="status-separator">·</span> Video embeds enabled <span class="status-separator">·</span> Some sites may restrict playback</span>
     </footer>
   </main>
 </body>
