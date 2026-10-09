@@ -487,14 +487,14 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><link rel="stylesheet" href="/proxy-fit.css?v=responsive-fit-1"><script src="/proxy-chrome.js?v=google-search-form-fix-3" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><link rel="stylesheet" href="/proxy-fit.css?v=toolbar-offset-2"><script src="/proxy-chrome.js?v=google-search-form-fix-3" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("head").append('<meta name="referrer" content="no-referrer">');
   $("title").text(($("title").text() || new URL(sourceUrl).hostname) + " — Schoolmathtime");
   const page = $.html();
   return page.replace(/<head([^>]*)>/i, '<head$1><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">')
-    .replace(/<body([^>]*)>/i, '<body$1 style="margin:0">');
+    .replace(/<body([^>]*)>/i, '<body$1 class="stm-proxied-page" style="margin:0">');
 }
 
 function escapeAttribute(value) {
