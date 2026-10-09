@@ -479,7 +479,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><script src="/proxy-chrome.js?v=google-search-fix-1" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><script src="/proxy-chrome.js?v=in-proxy-search-1" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("head").append('<meta name="referrer" content="no-referrer">');
@@ -540,7 +540,7 @@ app.get("/search", requireLogin, fetchLimiter, (req, res) => {
     "Cache-Control": "no-store",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'self' data: https:; script-src 'self' https://cse.google.com https://www.google.com https://www.gstatic.com https://www.googleapis.com; connect-src 'self' https://cse.google.com https://www.google.com https://www.googleapis.com; frame-src https://www.google.com https://www.googleusercontent.com https://cse.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    "Content-Security-Policy": "default-src 'self' data: https:; script-src 'self' https://cse.google.com https://*.google.com https://*.gstatic.com https://*.googleapis.com; connect-src 'self' https://*.google.com https://*.gstatic.com https://*.googleapis.com https://*.googleusercontent.com; frame-src https://*.google.com https://*.googleusercontent.com https://*.cse.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
   });
   res.status(200).send(html);
 });
@@ -562,10 +562,8 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
     const looksLikeUrl = rawInput.startsWith("https://") || rawInput.startsWith("http://") ||
       (!rawInput.split("").some((character) => character.charCodeAt(0) <= 32) && rawInput.includes("."));
     if (!looksLikeUrl) {
-      const googleSearch = new URL("https://www.google.com/search");
-      googleSearch.searchParams.set("q", rawInput);
       res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-      return res.redirect(302, googleSearch.toString());
+      return res.redirect(302, "/search?q=" + encodeURIComponent(rawInput));
     }
 
     const target = normalizeInput(rawInput);
