@@ -55,6 +55,22 @@
     if (button) button.textContent = saved ? "★" : "☆";
   }
 
+  find("stm-address-form")?.addEventListener("submit", (event) => {
+    const raw = address ? address.value.trim() : "";
+    if (!raw) return;
+    const isUrl = /^https?:\\/\\//i.test(raw) || (!/\\s/.test(raw) && raw.includes("."));
+    if (isUrl) return;
+    event.preventDefault();
+    const googleUrl = "https://www.google.com/search?q=" + encodeURIComponent(raw);
+    const opened = window.open(googleUrl, "_blank");
+    if (opened) {
+      opened.opener = null;
+      showNotice("Google Search opened in a new tab. Enter a result address here to browse it through Schoolmathtime.");
+    } else {
+      window.location.assign("/browse?url=" + encodeURIComponent(raw));
+    }
+  });
+
   find("stm-back")?.addEventListener("click", () => window.history.back());
   find("stm-forward")?.addEventListener("click", () => window.history.forward());
   find("stm-refresh")?.addEventListener("click", () => window.location.reload());
