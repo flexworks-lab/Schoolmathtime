@@ -226,7 +226,7 @@ function rewriteCss(css, sourceUrl) {
   let output = String(css || "");
   output = output.replace(/url\(\s*(['"]?)(.*?)\1\s*\)/gi, (match, quote, value) => {
     const rewritten = rewrite(value);
-    return rewritten ? "url('" + rewritten.replace(/'/g, "%27") + "')" : "url("")";
+    return rewritten ? "url('" + rewritten.replace(/'/g, "%27") + "')" : 'url("")';
   });
   output = output.replace(/@import\s+(['"])(.*?)\1\s*;/gi, (match, quote, value) => {
     const rewritten = rewrite(value);
