@@ -62,7 +62,7 @@
   find("stm-close-tab")?.addEventListener("click", () => { window.location.assign("/"); });
   find("stm-bookmark")?.addEventListener("click", bookmarkCurrentPage);
   find("stm-menu")?.addEventListener("click", () => {
-    showNotice("Schoolmathtime · read-only browsing · scripts and forms blocked.");
+    showNotice("JavaScript is enabled for this page. Forms and frames are restricted. Only browse sites you trust; third-party scripts run inside this proxy session.");
   });
 
   if (address) {
