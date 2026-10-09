@@ -613,11 +613,11 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
   }
   // Route origin-relative searches through the proxy because upstream form actions
   // are stripped for safety before this handler is injected.
-  if (/(^|\\.)youtube\\.com$/i.test(source.hostname)) {
+  if (/(^|\.)youtube\.com$/i.test(source.hostname)) {
     $("head").append('<script>(function(){function go(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=search_query],input#search");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();event.stopImmediatePropagation();var target=new URL("https://www.youtube.com/results");target.searchParams.set("search_query",query);window.location.assign("/browse?url="+encodeURIComponent(target.toString()))}document.addEventListener("submit",go,true);document.addEventListener("keydown",function(event){if(event.key!=="Enter")return;var field=event.target;if(!field||!field.matches||!field.matches("input[name=search_query],input#search")||!field.form)return;go({target:field.form,preventDefault:function(){event.preventDefault()},stopImmediatePropagation:function(){event.stopImmediatePropagation()}})},true)})();</script>');
   }
 
-  if (/(^|\\.)tiktok\\.com$/i.test(source.hostname)) {
+  if (/(^|\.)tiktok\.com$/i.test(source.hostname)) {
     $("head").append('<script>(function(){function go(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q],input[name=keyword],input[data-e2e=search-user-input],input[placeholder*=Search]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();event.stopImmediatePropagation();var target=new URL("https://www.tiktok.com/search");target.searchParams.set("q",query);window.location.assign("/browse?url="+encodeURIComponent(target.toString()))}document.addEventListener("submit",go,true);document.addEventListener("keydown",function(event){if(event.key!=="Enter")return;var field=event.target;if(!field||!field.matches||!field.matches("input[name=q],input[name=keyword],input[data-e2e=search-user-input],input[placeholder*=Search]")||!field.form)return;go({target:field.form,preventDefault:function(){event.preventDefault()},stopImmediatePropagation:function(){event.stopImmediatePropagation()}})},true)})();</script>');
   }
 
