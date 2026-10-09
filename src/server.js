@@ -528,7 +528,21 @@ app.post("/logout", (req, res) => {
 
 app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
   try {
-    const target = normalizeInput(req.query.url);
+    const rawInput = String(req.query.url || "").trim();
+    if (!rawInput) throw new Error("Enter a URL or search phrase.");
+
+    // Google serves an anti-bot/enable-JavaScript interstitial to server-side
+    // fetches. Let the user's real browser load Google Search for text queries.
+    const looksLikeUrl = /^https?:\\/\\//i.test(rawInput) ||
+      (!/\\s/.test(rawInput) && rawInput.includes("."));
+    if (!looksLikeUrl) {
+      const googleSearch = new URL("https://www.google.com/search");
+      googleSearch.searchParams.set("q", rawInput);
+      res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      return res.redirect(302, googleSearch.toString());
+    }
+
+    const target = normalizeInput(rawInput);
     const result = await fetchApproved(target, MAX_PAGE_BYTES);
     if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
       return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
