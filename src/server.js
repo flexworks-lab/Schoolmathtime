@@ -533,8 +533,8 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
 
     // Google serves an anti-bot/enable-JavaScript interstitial to server-side
     // fetches. Let the user's real browser load Google Search for text queries.
-    const looksLikeUrl = /^https?:\\/\\//i.test(rawInput) ||
-      (!/\\s/.test(rawInput) && rawInput.includes("."));
+    const looksLikeUrl = rawInput.startsWith("https://") || rawInput.startsWith("http://") ||
+      (!rawInput.split("").some((character) => character.charCodeAt(0) <= 32) && rawInput.includes("."));
     if (!looksLikeUrl) {
       const googleSearch = new URL("https://www.google.com/search");
       googleSearch.searchParams.set("q", rawInput);
