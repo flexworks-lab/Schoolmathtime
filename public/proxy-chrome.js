@@ -58,17 +58,13 @@
   find("stm-address-form")?.addEventListener("submit", (event) => {
     const raw = address ? address.value.trim() : "";
     if (!raw) return;
+    event.preventDefault();
     const isUrl = raw.startsWith("https://") || raw.startsWith("http://") ||
       (!raw.split("").some((character) => character.charCodeAt(0) <= 32) && raw.includes("."));
-    if (isUrl) return;
-    event.preventDefault();
-    const googleUrl = "https://www.google.com/search?q=" + encodeURIComponent(raw);
-    const opened = window.open(googleUrl, "_blank");
-    if (opened) {
-      opened.opener = null;
-      showNotice("Google Search opened in a new tab. Enter a result address here to browse it through Schoolmathtime.");
-    } else {
+    if (isUrl) {
       window.location.assign("/browse?url=" + encodeURIComponent(raw));
+    } else {
+      window.location.assign("/search?q=" + encodeURIComponent(raw));
     }
   });
 
