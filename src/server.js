@@ -25,9 +25,13 @@ const RESPONSE_CACHE_MAX_ENTRIES = 1024;
 const RESPONSE_CACHE_MAX_BYTES = Number(process.env.RESPONSE_CACHE_MAX_BYTES || 256 * 1024 * 1024);
 const UPSTREAM_COOLDOWN_MS = 2 * 60_000;
 const UPSTREAM_MAX_COOLDOWN_MS = 15 * 60_000;
+const YOUTUBE_REQUEST_GAP_MS = 350;
+const YOUTUBE_MAX_CONCURRENT_REQUESTS = 2;
+const YOUTUBE_MAX_QUEUED_REQUESTS = 48;
 const dnsCache = new Map();
 const responseCache = new Map();
 const upstreamCooldowns = new Map();
+const upstreamQueues = new Map();
 let responseCacheBytes = 0;
 
 function parseAllowedHosts(value) {
@@ -244,6 +248,113 @@ async function collectLimited(body, maxBytes) {
   return Buffer.concat(chunks, size);
 }
 
+function isYouTubeUpstreamHost(hostname) {
+  const host = String(hostname || "").toLowerCase().replace(/\\.$/, "");
+  return host === "youtube.com" || host.endsWith(".youtube.com") ||
+    host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com") ||
+    host === "youtubei.googleapis.com" || host.endsWith(".youtubei.googleapis.com");
+}
+
+function upstreamRateLimitKey(hostname) {
+  const host = String(hostname || "").toLowerCase().replace(/\\.$/, "");
+  if (host === "youtubei.googleapis.com" || host.endsWith(".youtubei.googleapis.com")) return "youtubei.googleapis.com";
+  if (host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")) return "youtube-nocookie.com";
+  if (host === "youtube.com" || host.endsWith(".youtube.com")) return "youtube.com";
+  return host;
+}
+
+function noteUpstreamRateLimit(key, headers = {}) {
+  const now = Date.now();
+  const raw = String(headers["retry-after"] || "").trim();
+  let waitMs = UPSTREAM_COOLDOWN_MS;
+  if (raw) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      waitMs = Math.max(UPSTREAM_COOLDOWN_MS, Math.min(UPSTREAM_MAX_COOLDOWN_MS, seconds * 1000));
+    } else {
+      const retryAt = Date.parse(raw);
+      if (Number.isFinite(retryAt)) {
+        waitMs = Math.max(UPSTREAM_COOLDOWN_MS, Math.min(UPSTREAM_MAX_COOLDOWN_MS, retryAt - now));
+      }
+    }
+  }
+  const until = now + waitMs;
+  upstreamCooldowns.set(key, Math.max(upstreamCooldowns.get(key) || 0, until));
+  while (upstreamCooldowns.size > 500) upstreamCooldowns.delete(upstreamCooldowns.keys().next().value);
+  return upstreamCooldowns.get(key);
+}
+
+function cooldownError(key) {
+  const seconds = Math.max(1, Math.ceil(((upstreamCooldowns.get(key) || Date.now()) - Date.now()) / 1000));
+  const error = new Error("YouTube is temporarily rate-limiting requests. Schoolmathtime has paused requests; try again in about " + seconds + " seconds.");
+  error.status = 429;
+  return error;
+}
+
+// Pace requests to YouTube-related hosts and cap parallel fetches. If YouTube
+// returns 429, pause that upstream and reject queued work rather than retrying
+// or continuing to send a burst of requests.
+function scheduleYouTubeRequest(hostname, task) {
+  const key = upstreamRateLimitKey(hostname);
+  return new Promise((resolve, reject) => {
+    let state = upstreamQueues.get(key);
+    if (!state) {
+      state = { pending: [], active: 0, lastStartedAt: 0, timer: null };
+      upstreamQueues.set(key, state);
+    }
+    if (state.pending.length >= YOUTUBE_MAX_QUEUED_REQUESTS) {
+      const error = new Error("Too many YouTube resources are waiting to load. Wait a moment and reload the page.");
+      error.status = 503;
+      reject(error);
+      return;
+    }
+    state.pending.push({ task, resolve, reject });
+    pumpYouTubeQueue(key, state);
+  });
+}
+
+function pumpYouTubeQueue(key, state) {
+  if (state.timer || state.active >= YOUTUBE_MAX_CONCURRENT_REQUESTS || !state.pending.length) return;
+  const cooldownUntil = upstreamCooldowns.get(key) || 0;
+  const cooldownWait = cooldownUntil - Date.now();
+  if (cooldownWait > 0) {
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      pumpYouTubeQueue(key, state);
+    }, cooldownWait);
+    return;
+  }
+  if (cooldownUntil) upstreamCooldowns.delete(key);
+
+  const wait = YOUTUBE_REQUEST_GAP_MS - (Date.now() - state.lastStartedAt);
+  if (wait > 0) {
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      pumpYouTubeQueue(key, state);
+    }, wait);
+    return;
+  }
+
+  const item = state.pending.shift();
+  state.active += 1;
+  state.lastStartedAt = Date.now();
+  Promise.resolve().then(item.task).then((result) => {
+    if (result?.status === 429) {
+      noteUpstreamRateLimit(key, result.headers || {});
+      const error = cooldownError(key);
+      while (state.pending.length) state.pending.shift().reject(error);
+    }
+    item.resolve(result);
+  }, item.reject).finally(() => {
+    state.active -= 1;
+    if (state.pending.length) pumpYouTubeQueue(key, state);
+    else if (state.active === 0) {
+      if (state.timer) clearTimeout(state.timer);
+      upstreamQueues.delete(key);
+    }
+  });
+}
+
 function readResponseCache(key, allowStale = false) {
   const entry = responseCache.get(key);
   if (!entry) return null;
@@ -370,22 +481,23 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
   const cached = readResponseCache(cacheKey);
   if (cached) return cached;
 
-  // Respect upstream rate limits: do not repeatedly hit a host while it is
-  // cooling down. A previously fetched stale response can still be served.
-  const cooldownUntil = upstreamCooldowns.get(target.hostname);
+  // Respect shared cooldowns across YouTube subdomains and serve stale content
+  // when available instead of making another upstream request.
+  const rateLimitKey = upstreamRateLimitKey(target.hostname);
+  const cooldownUntil = upstreamCooldowns.get(rateLimitKey);
   if (cooldownUntil && cooldownUntil > Date.now()) {
     const stale = readResponseCache(cacheKey, true);
     if (stale) return stale;
-    const waitSeconds = Math.max(1, Math.ceil((cooldownUntil - Date.now()) / 1000));
-    const error = new Error(`The remote website is temporarily rate-limiting requests. Try again in about ${waitSeconds} seconds.`);
-    error.status = 429;
-    throw error;
+    throw cooldownError(rateLimitKey);
   }
-  if (cooldownUntil) upstreamCooldowns.delete(target.hostname);
+  if (cooldownUntil) upstreamCooldowns.delete(rateLimitKey);
 
   let response;
   try {
-    response = await requestPinned(target, addresses, maxBytes);
+    const request = () => requestPinned(target, addresses, maxBytes);
+    response = isYouTubeUpstreamHost(target.hostname)
+      ? await scheduleYouTubeRequest(target.hostname, request)
+      : await request();
   } catch (error) {
     // A previously successful page is more useful than a transient upstream
     // timeout. Do not retry the origin here; use the bounded stale cache.
@@ -394,15 +506,8 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
     throw error;
   }
   if (response.status === 429) {
-    // Honor Retry-After when present and apply a bounded per-host cooldown.
-    // This protects the service from repeatedly requesting a throttled origin.
-    const retryAfter = Number(response.headers?.["retry-after"] || 0);
-    const cooldownMs = retryAfter > 0
-      ? Math.min(UPSTREAM_MAX_COOLDOWN_MS, Math.max(UPSTREAM_COOLDOWN_MS, retryAfter * 1000))
-      : UPSTREAM_COOLDOWN_MS;
-    upstreamCooldowns.set(target.hostname, Date.now() + cooldownMs);
-    while (upstreamCooldowns.size > 500) upstreamCooldowns.delete(upstreamCooldowns.keys().next().value);
-    // If this page was fetched successfully before, serve the bounded stale copy.
+    // The request scheduler has already set the shared cooldown and stopped
+    // queued requests. Prefer a previously fetched copy if one remains usable.
     const stale = readResponseCache(cacheKey, true);
     if (stale) return stale;
     const error = new Error("The remote website is temporarily rate-limiting requests (HTTP 429). Please wait before trying again.");
