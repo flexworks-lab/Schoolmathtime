@@ -120,6 +120,33 @@ function isPublicAddress(address) {
   }
 }
 
+async function resolveHostAddresses(hostname) {
+  // Prefer the system resolver. If it fails transiently, fall back to DNS A/AAAA
+  // records while applying the same public-address checks before any connection.
+  try {
+    const systemAddresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    if (systemAddresses.length) {
+      return systemAddresses.map(({ address, family }) => ({ address, family }));
+    }
+  } catch {
+    // Fall through to explicit A/AAAA queries.
+  }
+
+  const [v4, v6] = await Promise.allSettled([
+    dns.resolve4(hostname),
+    dns.resolve6(hostname)
+  ]);
+  const addresses = [];
+  if (v4.status === "fulfilled") {
+    for (const address of v4.value) addresses.push({ address, family: 4 });
+  }
+  if (v6.status === "fulfilled") {
+    for (const address of v6.value) addresses.push({ address, family: 6 });
+  }
+  if (!addresses.length) throw new Error("DNS could not resolve this hostname. Check the address or try again.");
+  return addresses;
+}
+
 async function validateTarget(input) {
   let target;
   try {
@@ -130,7 +157,7 @@ async function validateTarget(input) {
   if (target.protocol !== "https:") throw new Error("Only HTTPS websites are supported.");
   if (target.port && target.port !== "443") throw new Error("Only standard HTTPS websites on port 443 are supported.");
   if (target.username || target.password) throw new Error("URLs containing credentials are not allowed.");
-  const hostname = target.hostname.toLowerCase().replace(/\.$/, "");
+  const hostname = target.hostname.toLowerCase().replace(/\\.$/, "");
   if (!hostname || net.isIP(hostname) || hostname === "localhost" ||
       hostname.endsWith(".localhost") || hostname.endsWith(".local") ||
       hostname.endsWith(".internal") || !hostname.includes(".") || !isAllowedHost(hostname)) {
@@ -146,10 +173,9 @@ async function validateTarget(input) {
     dnsCache.set(hostname, cachedDns);
   } else {
     try {
-      addresses = (await dns.lookup(hostname, { all: true, verbatim: true }))
-        .map(({ address, family }) => ({ address, family }));
-    } catch {
-      throw new Error("That domain could not be resolved.");
+      addresses = await resolveHostAddresses(hostname);
+    } catch (error) {
+      throw new Error(error.message || "DNS lookup failed. Check the domain or try again.");
     }
     if (!addresses.length || addresses.some((entry) => !isPublicAddress(entry.address))) {
       throw new Error("The destination resolves to a private or reserved network and was blocked.");
@@ -167,14 +193,11 @@ function normalizeInput(input) {
   const value = String(input || "").trim();
   if (!value) throw new Error("Enter a URL or search phrase.");
   if (value.length > 2048) throw new Error("The URL or search phrase is too long.");
-  if (/^https?:\/\//i.test(value)) return value;
-  if (/^[a-z0-9.-]+(?::\d+)?(?:\/.*)?$/i.test(value) && value.includes(".") && !/\s/.test(value)) {
+  if (/^https?:\\/\\//i.test(value)) return value;
+  if (/^[a-z0-9.-]+(?::\\d+)?(?:\\/.*)?$/i.test(value) && value.includes(".") && !/\\s/.test(value)) {
     return "https://" + value;
   }
-  if (!isAllowedHost("en.wikipedia.org")) {
-    throw new Error("Search phrases require wikipedia.org to be in ALLOWED_HOSTS. You can still enter an approved URL.");
-  }
-  return "https://en.wikipedia.org/w/index.php?search=" + encodeURIComponent(value);
+  return "https://www.google.com/search?q=" + encodeURIComponent(value);
 }
 
 async function collectLimited(body, maxBytes) {
@@ -258,7 +281,8 @@ function requestPinned(target, addresses, maxBytes) {
       maxHeaderSize: 16 * 1024,
       agent: upstreamAgent,
       headers: {
-        "User-Agent": "Schoolmathtime-EducationalGateway/1.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html, text/css, image/*, font/*, application/font-woff, application/vnd.ms-fontobject;q=0.8"
       },
       lookup: (_hostname, options, callback) => {
