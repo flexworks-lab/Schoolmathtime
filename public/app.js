@@ -98,7 +98,8 @@ function showApp(config) {
 function navigate(value) {
   const query = String(value || "").trim();
   if (!query) return;
-  const isUrl = /^https?:\\/\\//i.test(query) || (!/\\s/.test(query) && query.includes("."));
+  const isUrl = query.startsWith("https://") || query.startsWith("http://") ||
+    (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
   if (!isUrl) {
     const googleUrl = "https://www.google.com/search?q=" + encodeURIComponent(query);
     const opened = window.open(googleUrl, "_blank");
