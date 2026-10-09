@@ -5,7 +5,7 @@ A Reflect4-inspired browser-style web gateway. This is an independent project an
 ## Features
 
 - Browser-style tabs, navigation buttons, address bar, home page, and bookmarks.
-- Plain-text searches are sent to Google Search.
+- Plain-text searches open Google Search directly in a new browser tab. Google blocks the server-side fetch with a JavaScript interstitial, so searches are opened in the real browser instead of leaving a stalled proxy page.
 - `ALLOWED_HOSTS=*` mode accepts any public HTTPS hostname. Alternatively, set a comma-separated host allowlist.
 - HTTPS connections are kept alive and reused. DNS lookups are cached for 30 seconds; successful HTML responses are cached for 30 seconds and small assets for up to 10 minutes.
 - DNS results are checked and pinned to public IP addresses. Redirects are revalidated; private/reserved addresses, localhost, internal hostnames, and non-standard HTTPS ports are blocked.
