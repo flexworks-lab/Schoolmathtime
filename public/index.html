@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <meta name="description" content="Schoolmathtime — a simple educational web gateway.">
+  <title>Schoolmathtime</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="page-glow" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Schoolmathtime home">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span>schoolmathtime</span>
+    </a>
+    <span class="top-note">EDUCATION GATEWAY</span>
+  </header>
+
+  <main class="layout">
+    <section id="loginPanel" class="hero-panel" aria-labelledby="welcomeTitle">
+      <div class="eyebrow"><span class="status-dot"></span> PRIVATE ACCESS</div>
+      <h1 id="welcomeTitle">Your next<br><span>learning space.</span></h1>
+      <p class="intro">A clean place to open approved learning resources from one simple search bar.</p>
+      <form id="loginForm" class="access-form">
+        <label for="accessKey">Access key</label>
+        <div class="input-row">
+          <input id="accessKey" name="accessKey" type="password" autocomplete="current-password" placeholder="Enter your access key" required>
+          <button class="primary-button" type="submit">Continue <span aria-hidden="true">↗</span></button>
+        </div>
+        <p id="loginMessage" class="message" role="status" aria-live="polite"></p>
+      </form>
+      <div class="fine-print"><span class="lock-icon" aria-hidden="true">⌑</span> Access is managed by the site operator.</div>
+    </section>
+
+    <section id="appPanel" class="hero-panel app-panel" aria-labelledby="appTitle" hidden>
+      <div class="eyebrow"><span class="status-dot"></span> YOU'RE CONNECTED</div>
+      <h1 id="appTitle">Where to<br><span>from here?</span></h1>
+      <p class="intro">Search a topic or enter a URL from the approved domains.</p>
+      <form id="browseForm" class="search-form">
+        <label class="sr-only" for="targetInput">Search or enter a URL</label>
+        <div class="search-row">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="targetInput" name="url" type="text" autocomplete="url" placeholder="Search or enter a website…" required>
+          <button class="primary-button" type="submit">Go <span aria-hidden="true">↗</span></button>
+        </div>
+        <p class="search-hint">Text searches open Wikipedia. Website URLs must be on the operator's allowlist.</p>
+      </form>
+      <div class="quick-links">
+        <div class="quick-heading"><span>APPROVED DOMAINS</span><span class="line"></span></div>
+        <div id="domainList" class="domain-list"><span class="muted">Loading approved domains…</span></div>
+      </div>
+      <div class="app-footer">
+        <span class="fine-print"><span class="lock-icon" aria-hidden="true">⌑</span> Read-only browsing · scripts disabled</span>
+        <button id="logoutButton" class="text-button" type="button">Sign out</button>
+      </div>
+    </section>
+
+    <aside class="side-note">
+      <div class="note-number">01 <span>—</span> LEARN</div>
+      <div class="note-rule"></div>
+      <p>One small starting point for the sites that help you learn, explore, and create.</p>
+      <div class="note-bottom"><span class="tiny-square"></span> BUILT FOR FOCUS</div>
+    </aside>
+  </main>
+
+  <footer class="page-footer">
+    <span>SCHOOLMATHTIME</span>
+    <span>Use only resources approved by your site operator.</span>
+  </footer>
+</body>
+</html>
