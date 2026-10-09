@@ -58,7 +58,8 @@
   find("stm-address-form")?.addEventListener("submit", (event) => {
     const raw = address ? address.value.trim() : "";
     if (!raw) return;
-    const isUrl = /^https?:\\/\\//i.test(raw) || (!/\\s/.test(raw) && raw.includes("."));
+    const isUrl = raw.startsWith("https://") || raw.startsWith("http://") ||
+      (!raw.split("").some((character) => character.charCodeAt(0) <= 32) && raw.includes("."));
     if (isUrl) return;
     event.preventDefault();
     const googleUrl = "https://www.google.com/search?q=" + encodeURIComponent(raw);
