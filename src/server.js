@@ -308,7 +308,36 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     }
   });
 
-  const toolbar = '<div id="schoolmathtime-toolbar" style="position:sticky;top:0;z-index:2147483647;display:flex;gap:10px;align-items:center;padding:10px 14px;background:#17191f;color:#f5f6f8;border-bottom:1px solid #3a3d46;font:13px system-ui,sans-serif;box-shadow:0 2px 10px #0002"><a href="/" style="color:#f5f6f8;text-decoration:none;font-weight:700;white-space:nowrap">SCHOOLMATHTIME</a><form action="/browse" method="get" style="display:flex;gap:8px;flex:1;margin:0"><input name="url" value="' + escapeAttribute(sourceUrl) + '" aria-label="Current website" style="min-width:0;flex:1;padding:9px 11px;border:1px solid #555a65;border-radius:7px;background:#272a32;color:#fff"><button style="padding:8px 14px;border:0;border-radius:7px;background:#d9dee7;color:#17191e;font-weight:700">Go</button></form><a href="/" style="color:#c5c9d2;white-space:nowrap">Home</a></div>';
+  const hostLabel = escapeAttribute(new URL(sourceUrl).hostname);
+  const toolbar = `<div id="stm-browser-chrome" role="region" aria-label="Schoolmathtime browser controls">
+    <div class="stm-tab-strip">
+      <span class="stm-mini-logo" aria-hidden="true">S</span>
+      <div class="stm-tab">
+        <span class="stm-tab-icon" aria-hidden="true">S</span>
+        <span class="stm-tab-title">${hostLabel}</span>
+        <button id="stm-close-tab" class="stm-tab-close" type="button" aria-label="Close tab" title="Close tab">×</button>
+      </div>
+      <button id="stm-new-tab" class="stm-new-tab" type="button" aria-label="Open new tab" title="New tab">+</button>
+      <div class="stm-window-actions" aria-hidden="true"><span class="stm-window-action"></span><span class="stm-window-action square"></span><span class="stm-window-action close"></span></div>
+    </div>
+    <div class="stm-toolbar-row">
+      <div class="stm-controls">
+        <button id="stm-back" class="stm-control" type="button" title="Back" aria-label="Back">←</button>
+        <button id="stm-forward" class="stm-control" type="button" title="Forward" aria-label="Forward">→</button>
+        <button id="stm-refresh" class="stm-control" type="button" title="Reload" aria-label="Reload">↻</button>
+        <a class="stm-control home" href="/" title="Home" aria-label="Home">⌂</a>
+      </div>
+      <form id="stm-address-form" class="stm-address-form" action="/browse" method="get" role="search">
+        <span class="stm-address-security" aria-hidden="true">◈</span>
+        <input id="stm-address" name="url" value="${escapeAttribute(sourceUrl)}" aria-label="Search or enter an address" spellcheck="false" autocomplete="url">
+        <button class="stm-address-go" type="submit">Go ↵</button>
+      </form>
+      <button id="stm-bookmark" class="stm-control" type="button" title="Bookmark page" aria-label="Bookmark page">☆</button>
+      <button id="stm-menu" class="stm-control" type="button" title="Browser information" aria-label="Browser information">⋮</button>
+    </div>
+    <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
+  </div>`;
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css"><script src="/proxy-chrome.js" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("head").append('<meta name="referrer" content="no-referrer">');
@@ -368,7 +397,7 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'self' data: blob:; script-src 'none'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "Content-Security-Policy": "default-src 'self' data: blob:; script-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
     });
     res.status(200).send(html);
   } catch (error) {
