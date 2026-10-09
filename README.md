@@ -6,6 +6,7 @@ A Reflect4-inspired browser-style web gateway. This is an independent project an
 
 - Browser-style tabs, navigation buttons, address bar, home page, and bookmarks.
 - Plain-text searches open Google's actual Search website through the Schoolmathtime proxy; website URLs are proxied the same way.
+- Proxied websites receive responsive sizing rules so images and layout containers fit the browser width, while wide tables and code can scroll within their own areas.
 - `ALLOWED_HOSTS=*` mode accepts any public HTTPS hostname. Alternatively, set a comma-separated host allowlist.
 - HTTPS connections are kept alive and reused. DNS lookups are cached for 30 seconds; successful HTML responses are cached for 30 seconds and small assets for up to 10 minutes.
 - DNS results are checked and pinned to public IP addresses. Redirects are revalidated; private/reserved addresses, localhost, internal hostnames, and non-standard HTTPS ports are blocked.
