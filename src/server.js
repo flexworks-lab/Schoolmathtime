@@ -238,14 +238,18 @@ async function collectLimited(body, maxBytes) {
   return Buffer.concat(chunks, size);
 }
 
-function readResponseCache(key) {
+function readResponseCache(key, allowStale = false) {
   const entry = responseCache.get(key);
   if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    responseCache.delete(key);
-    responseCacheBytes -= entry.body.length;
+  const now = Date.now();
+  if (entry.expiresAt <= now && (!allowStale || entry.staleUntil <= now)) {
+    if (entry.staleUntil <= now) {
+      responseCache.delete(key);
+      responseCacheBytes -= entry.body.length;
+    }
     return null;
   }
+  if (entry.expiresAt <= now && !allowStale) return null;
   responseCache.delete(key);
   responseCache.set(key, entry);
   return {
@@ -253,7 +257,8 @@ function readResponseCache(key) {
     contentType: entry.contentType,
     body: Buffer.from(entry.body),
     status: entry.status,
-    cached: true
+    cached: true,
+    stale: entry.expiresAt <= now
   };
 }
 
@@ -357,6 +362,15 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
   if (cached) return cached;
 
   const response = await requestPinned(target, addresses, maxBytes);
+  if (response.status === 429) {
+    // Do not hammer a rate-limited origin. If this page was fetched successfully
+    // before, serve the bounded stale copy for a short period instead.
+    const stale = readResponseCache(cacheKey, true);
+    if (stale) return stale;
+    const error = new Error("The remote website is temporarily rate-limiting requests (HTTP 429). Please wait before trying again.");
+    error.status = 429;
+    throw error;
+  }
   if ([301, 302, 303, 307, 308].includes(response.status)) {
     if (!response.location) throw new Error("The remote website sent an invalid redirect.");
     if (redirectCount >= MAX_REDIRECTS) throw new Error("The website redirected too many times.");
