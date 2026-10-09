@@ -19,10 +19,15 @@ const FETCH_TIMEOUT_MS = 25_000;
 const MAX_REDIRECTS = 5;
 const DNS_CACHE_TTL_MS = 30_000;
 // A ceiling only: memory is used as successful responses are cached, not reserved up front.
-const RESPONSE_CACHE_MAX_ENTRIES = 2048;
-const RESPONSE_CACHE_MAX_BYTES = 10 * 1024 * 1024 * 1024;
+const RESPONSE_CACHE_MAX_ENTRIES = 1024;
+// Keep the cache bounded for memory-limited hosts such as Render. This is a
+// RAM ceiling, not preallocated storage; a multi-GB cache can restart the service.
+const RESPONSE_CACHE_MAX_BYTES = Number(process.env.RESPONSE_CACHE_MAX_BYTES || 256 * 1024 * 1024);
+const UPSTREAM_COOLDOWN_MS = 2 * 60_000;
+const UPSTREAM_MAX_COOLDOWN_MS = 15 * 60_000;
 const dnsCache = new Map();
 const responseCache = new Map();
+const upstreamCooldowns = new Map();
 let responseCacheBytes = 0;
 
 function parseAllowedHosts(value) {
@@ -365,6 +370,19 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
   const cached = readResponseCache(cacheKey);
   if (cached) return cached;
 
+  // Respect upstream rate limits: do not repeatedly hit a host while it is
+  // cooling down. A previously fetched stale response can still be served.
+  const cooldownUntil = upstreamCooldowns.get(target.hostname);
+  if (cooldownUntil && cooldownUntil > Date.now()) {
+    const stale = readResponseCache(cacheKey, true);
+    if (stale) return stale;
+    const waitSeconds = Math.max(1, Math.ceil((cooldownUntil - Date.now()) / 1000));
+    const error = new Error(`The remote website is temporarily rate-limiting requests. Try again in about ${waitSeconds} seconds.`);
+    error.status = 429;
+    throw error;
+  }
+  if (cooldownUntil) upstreamCooldowns.delete(target.hostname);
+
   let response;
   try {
     response = await requestPinned(target, addresses, maxBytes);
@@ -376,8 +394,15 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
     throw error;
   }
   if (response.status === 429) {
-    // Do not hammer a rate-limited origin. If this page was fetched successfully
-    // before, serve the bounded stale copy for a short period instead.
+    // Honor Retry-After when present and apply a bounded per-host cooldown.
+    // This protects the service from repeatedly requesting a throttled origin.
+    const retryAfter = Number(response.headers?.["retry-after"] || 0);
+    const cooldownMs = retryAfter > 0
+      ? Math.min(UPSTREAM_MAX_COOLDOWN_MS, Math.max(UPSTREAM_COOLDOWN_MS, retryAfter * 1000))
+      : UPSTREAM_COOLDOWN_MS;
+    upstreamCooldowns.set(target.hostname, Date.now() + cooldownMs);
+    while (upstreamCooldowns.size > 500) upstreamCooldowns.delete(upstreamCooldowns.keys().next().value);
+    // If this page was fetched successfully before, serve the bounded stale copy.
     const stale = readResponseCache(cacheKey, true);
     if (stale) return stale;
     const error = new Error("The remote website is temporarily rate-limiting requests (HTTP 429). Please wait before trying again.");
