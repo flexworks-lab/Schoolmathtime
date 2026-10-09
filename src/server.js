@@ -15,7 +15,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 const MAX_RESOURCE_BYTES = 12 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 10000;
+const FETCH_TIMEOUT_MS = 25_000;
 const MAX_REDIRECTS = 5;
 const DNS_CACHE_TTL_MS = 30_000;
 const RESPONSE_CACHE_MAX_ENTRIES = 96;
@@ -361,7 +361,16 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
   const cached = readResponseCache(cacheKey);
   if (cached) return cached;
 
-  const response = await requestPinned(target, addresses, maxBytes);
+  let response;
+  try {
+    response = await requestPinned(target, addresses, maxBytes);
+  } catch (error) {
+    // A previously successful page is more useful than a transient upstream
+    // timeout. Do not retry the origin here; use the bounded stale cache.
+    const stale = readResponseCache(cacheKey, true);
+    if (stale) return stale;
+    throw error;
+  }
   if (response.status === 429) {
     // Do not hammer a rate-limited origin. If this page was fetched successfully
     // before, serve the bounded stale copy for a short period instead.
