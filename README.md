@@ -1,25 +1,29 @@
 # Schoolmathtime
 
-A Reflect4-inspired, configurable web gateway starter with a simple URL/search home page. This is an independent project and is not affiliated with Reflect4.
+A Reflect4-inspired browser-style web gateway. This is an independent project and is not affiliated with Reflect4.
 
-## Safety model
+## Features
 
-`ALLOWED_HOSTS=*` allows any public HTTPS hostname; otherwise use a comma-separated allowlist. Only standard HTTPS port 443 is supported.
-- Access requires a server-side key; do not place the key in source code or frontend files.
-Redirects are revalidated at every hop, DNS answers are checked and pinned to public addresses, private/reserved IP targets are rejected, and responses have size/time limits.
-- Proxied pages are read-only: scripts, forms, frames, and embedded objects are removed. This intentionally limits compatibility with sites that need JavaScript.
-Keep the access key private. This gateway does not bypass a destination site's own login, paywall, or access controls.
+- Browser-style tabs, navigation buttons, address bar, home page, and bookmarks.
+- `ALLOWED_HOSTS=*` mode accepts any public HTTPS hostname. Alternatively, set a comma-separated host allowlist.
+- HTTPS connections are kept alive and reused. DNS lookups are cached for 30 seconds; successful HTML responses are cached for 30 seconds and small assets for up to 10 minutes.
+- DNS results are checked and pinned to public IP addresses. Redirects are revalidated; private/reserved addresses, localhost, internal hostnames, and non-standard HTTPS ports are blocked.
+- The server access key is checked server-side and login attempts are rate-limited.
+
+## Important compatibility note
+
+This gateway deliberately removes remote scripts, forms, frames, and embedded objects. It can display many public pages, but websites that require JavaScript or interactive forms will not work fully. The proxy does not bypass a destination site's login, paywall, or other access controls. Wildcard mode broadens which public HTTPS websites may be fetched, so keep the access key private and only deploy it where you have permission to use it.
 
 ## Run locally
 
-Requires Node.js 20.18+.
+Requires Node.js 20.9 or later.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 ```
 
-Edit `.env` and set unique `PROXY_ACCESS_KEY` and `SESSION_SECRET` values. Set `ALLOWED_HOSTS=*` to accept any public HTTPS hostname, or enter a comma-separated list. Start the app:
+Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). The example file sets `ALLOWED_HOSTS=*` to allow public HTTPS hostnames. Change it to a comma-separated list to restrict access. Then run:
 
 ```bash
 npm start
@@ -27,10 +31,16 @@ npm start
 
 Open `http://localhost:3000`. Never commit `.env`.
 
-## Deployment
+## Deploy on Render
 
-Deploy as a Node web service (for example, Render). Set `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS`, and optionally `PORT` as environment variables. Set `NODE_ENV=production` to enable secure session cookies; production must use HTTPS. If your host terminates TLS in front of Node, configure `TRUST_PROXY=1` so secure cookies work behind that trusted proxy. Any public deployment should use a strong random key. Wildcard host mode broadens which public websites can be fetched.
+Create a **Web Service** from `flexworks-lab/Schoolmathtime`.
 
-## Current limitations
+- Build command: `npm ci`
+- Start command: `npm start`
+- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `NODE_ENV=production`, `TRUST_PROXY=1`
 
-The gateway caches successful HTML responses in memory for 30 seconds, small assets for up to 10 minutes, and validated DNS answers for 30 seconds to make repeat browsing faster. Caches clear when the service restarts. The gateway provides a sanitized, read-only view: active scripts and forms are disabled, so sites that depend on them will not fully work. This does not bypass a website's own access controls.
+Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HOSTS` is already defined in Render, update that existing value to `*` and redeploy; changing `.env.example` in GitHub does not replace Render's configured value.
+
+## Limits
+
+The short-lived caches are stored in memory and are cleared when the service restarts. Free hosting plans can sleep or have limited CPU/network capacity, so they cannot guarantee instant first loads. Dynamic websites may remain incomplete because remote scripts and forms are disabled.
