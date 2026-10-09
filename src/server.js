@@ -64,7 +64,7 @@ const fetchLimiter = rateLimit({
   message: "Rate limit reached. Please wait a moment."
 });
 
-function requireLogin(_req, _res, next) {
+function allowPublicBrowsing(_req, _res, next) {
   // Access keys are disabled by request. Public routes still retain the rate
   // limit, HTTPS-only policy, public-IP DNS validation, and redirect checks.
   return next();
@@ -658,7 +658,7 @@ app.get("/api/session", (_req, res) => {
   });
 });
 
-app.get("/search", requireLogin, (req, res) => {
+app.get("/search", allowPublicBrowsing, (req, res) => {
   // Compatibility route for cached pages: explicitly proxy Google's real search URL.
   const query = String(req.query.q || "").trim().slice(0, 300);
   if (!query) return res.redirect(302, "/");
