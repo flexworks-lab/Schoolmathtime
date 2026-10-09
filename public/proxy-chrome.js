@@ -70,8 +70,6 @@
   find("stm-back")?.addEventListener("click", () => window.history.back());
   find("stm-forward")?.addEventListener("click", () => window.history.forward());
   find("stm-refresh")?.addEventListener("click", () => window.location.reload());
-  find("stm-new-tab")?.addEventListener("click", () => window.open("/", "_blank", "noopener"));
-  find("stm-close-tab")?.addEventListener("click", () => { window.location.assign("/"); });
   find("stm-bookmark")?.addEventListener("click", bookmarkCurrentPage);
   find("stm-menu")?.addEventListener("click", () => {
     showNotice("JavaScript is enabled for this page. Forms and frames are restricted. Only browse sites you trust; third-party scripts run inside this proxy session.");
