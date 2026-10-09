@@ -96,9 +96,20 @@ function showApp(config) {
 }
 
 function navigate(value) {
-  const url = String(value || "").trim();
-  if (!url) return;
-  window.location.assign("/browse?url=" + encodeURIComponent(url));
+  const query = String(value || "").trim();
+  if (!query) return;
+  const isUrl = /^https?:\\/\\//i.test(query) || (!/\\s/.test(query) && query.includes("."));
+  if (!isUrl) {
+    const googleUrl = "https://www.google.com/search?q=" + encodeURIComponent(query);
+    const opened = window.open(googleUrl, "_blank");
+    if (opened) {
+      opened.opener = null;
+      announce("Google Search opened in a new tab. Enter a result URL here to browse it through Schoolmathtime.");
+      return;
+    }
+    // Fall back to the server redirect if this browser blocks opening a new tab.
+  }
+  window.location.assign("/browse?url=" + encodeURIComponent(query));
 }
 
 async function loadSession() {
