@@ -5,6 +5,7 @@ const dns = require("node:dns").promises;
 const net = require("node:net");
 const crypto = require("node:crypto");
 const https = require("node:https");
+const upstreamAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60_000 });
 const express = require("express");
 const session = require("express-session");
 const helmet = require("helmet");
@@ -89,7 +90,7 @@ const loginLimiter = rateLimit({
 });
 const fetchLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 60,
+  limit: 240,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: "Rate limit reached. Please wait a moment."
@@ -255,6 +256,7 @@ function requestPinned(target, addresses, maxBytes) {
       method: "GET",
       path: target.pathname + target.search,
       maxHeaderSize: 16 * 1024,
+      agent: upstreamAgent,
       headers: {
         "User-Agent": "Schoolmathtime-EducationalGateway/1.0",
         "Accept": "text/html, text/css, image/*, font/*, application/font-woff, application/vnd.ms-fontobject;q=0.8"
