@@ -211,18 +211,41 @@ function getYouTubeVideoInfo(input) {
 }
 
 function createYouTubePlayerDocument(info) {
-  const id = info.id;
-  const ratio = info.isShort ? "9 / 16" : "16 / 9";
-  const maxWidth = info.isShort ? "430px" : "1200px";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YouTube video</title><style>
-    html,body{margin:0;min-height:100%;background:#0f0f0f;color:#f1f1f1;font-family:Arial,Helvetica,sans-serif}
-    .stm-yt-shell{width:100%;max-width:1280px;margin:0 auto;padding:clamp(12px,3vw,32px)}
-    .stm-yt-heading{margin:0 0 16px;font-size:clamp(18px,2vw,24px);font-weight:600}
-    .stm-yt-player{width:100%;max-width:${maxWidth};aspect-ratio:${ratio};margin:0 auto;background:#000;border-radius:12px;overflow:hidden}
-    .stm-yt-player iframe{display:block;width:100%;height:100%;border:0}
-    .stm-yt-note{max-width:${maxWidth};margin:14px auto 0;color:#aaa;font-size:13px;line-height:1.5}
-    @media(max-width:600px){.stm-yt-shell{padding:12px}.stm-yt-player{border-radius:8px}}
-  </style></head><body><main class="stm-yt-shell"><h1 class="stm-yt-heading">YouTube video</h1><div class="stm-yt-player"><iframe src="https://www.youtube.com/embed/${id}?playsinline=1&rel=0" title="YouTube video player" loading="eager" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p class="stm-yt-note">Video playback is provided by YouTube. Some videos may require YouTube sign-in, age verification, or permission to embed.</p></main></body></html>`;
+  // Render only the requested video. Loading the iframe in the visitor's
+  // browser avoids fetching the whole YouTube watch page through our server.
+  const id = encodeURIComponent(info.id);
+  const shortStyle = info.isShort
+    ? ".stm-yt-player{width:min(100vw,56.25vh);height:min(100vh,177.7778vw)}"
+    : ".stm-yt-player{width:min(100vw,177.7778vh);height:min(100vh,56.25vw)}";
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Video — Schoolmathtime</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+  body{display:grid;place-items:center}
+  .stm-yt-player{display:block;max-width:100vw;max-height:100vh;border:0;background:#000}
+  .stm-yt-player iframe{display:block;width:100%;height:100%;border:0}
+  ${shortStyle}
+</style>
+</head>
+<body>
+<main class="stm-yt-player" aria-label="Video player">
+<iframe
+  src="https://www.youtube.com/embed/${id}?playsinline=1&rel=0"
+  title="YouTube video"
+  loading="eager"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen>
+</iframe>
+</main>
+</body>
+</html>`;
 }
 
 function isSupportedMediaFrame(target) {
@@ -910,10 +933,23 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
         fetchTarget = parsed.toString();
       }
     } catch {}
+
+    // YouTube video links use a direct official embed in the visitor's browser.
+    // This skips the rate-limited server-side HTML fetch for /watch, Shorts,
+    // /live, and youtu.be links while leaving normal YouTube browsing proxied.
+    const videoInfo = getYouTubeVideoInfo(fetchTarget);
+    if (videoInfo) {
+      res.set({
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+      });
+      return res.status(200).send(createYouTubePlayerDocument(videoInfo));
+    }
+
     let html;
-    // Keep YouTube's original watch page and layout instead of replacing it with
-    // a standalone embed. This preserves the familiar player, title, channel,
-    // recommendations, and other watch-page UI as far as the proxy permits.
     const result = await fetchApproved(fetchTarget, MAX_PAGE_BYTES);
     if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
       return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
