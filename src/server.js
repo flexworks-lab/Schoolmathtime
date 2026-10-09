@@ -4,6 +4,7 @@ const path = require("node:path");
 const dns = require("node:dns").promises;
 const net = require("node:net");
 const crypto = require("node:crypto");
+const https = require("node:https");
 const express = require("express");
 const session = require("express-session");
 const helmet = require("helmet");
@@ -19,6 +20,12 @@ const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 const MAX_RESOURCE_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_REDIRECTS = 5;
+const DNS_CACHE_TTL_MS = 30_000;
+const RESPONSE_CACHE_MAX_ENTRIES = 96;
+const RESPONSE_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const dnsCache = new Map();
+const responseCache = new Map();
+let responseCacheBytes = 0;
 
 function parseAllowedHosts(value) {
   return [...new Set(String(value || "").split(",").map((item) =>
@@ -98,6 +105,8 @@ function requireLogin(req, res, next) {
 
 function isAllowedHost(hostname) {
   const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  if (!host || host.includes("..")) return false;
+  if (ALLOWED_HOSTS.includes("*")) return true;
   return ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith("." + allowed));
 }
 
@@ -118,21 +127,39 @@ async function validateTarget(input) {
     throw new Error("Enter a complete URL or a search phrase.");
   }
   if (target.protocol !== "https:") throw new Error("Only HTTPS websites are supported.");
+  if (target.port && target.port !== "443") throw new Error("Only standard HTTPS websites on port 443 are supported.");
   if (target.username || target.password) throw new Error("URLs containing credentials are not allowed.");
   const hostname = target.hostname.toLowerCase().replace(/\.$/, "");
-  if (!hostname || net.isIP(hostname) || !isAllowedHost(hostname)) {
-    throw new Error("That domain is not on the operator's approved-domain list.");
+  if (!hostname || net.isIP(hostname) || hostname === "localhost" ||
+      hostname.endsWith(".localhost") || hostname.endsWith(".local") ||
+      hostname.endsWith(".internal") || !hostname.includes(".") || !isAllowedHost(hostname)) {
+    throw new Error("That domain is not available in this proxy.");
   }
+  target.hash = "";
+
   let addresses;
-  try {
-    addresses = await dns.lookup(hostname, { all: true, verbatim: true });
-  } catch {
-    throw new Error("That domain could not be resolved.");
+  const cachedDns = dnsCache.get(hostname);
+  if (cachedDns && cachedDns.expiresAt > Date.now()) {
+    addresses = cachedDns.addresses;
+    dnsCache.delete(hostname);
+    dnsCache.set(hostname, cachedDns);
+  } else {
+    try {
+      addresses = (await dns.lookup(hostname, { all: true, verbatim: true }))
+        .map(({ address, family }) => ({ address, family }));
+    } catch {
+      throw new Error("That domain could not be resolved.");
+    }
+    if (!addresses.length || addresses.some((entry) => !isPublicAddress(entry.address))) {
+      throw new Error("The destination resolves to a private or reserved network and was blocked.");
+    }
+    dnsCache.set(hostname, { addresses, expiresAt: Date.now() + DNS_CACHE_TTL_MS });
+    while (dnsCache.size > 500) dnsCache.delete(dnsCache.keys().next().value);
   }
   if (!addresses.length || addresses.some((entry) => !isPublicAddress(entry.address))) {
     throw new Error("The destination resolves to a private or reserved network and was blocked.");
   }
-  return target;
+  return { target, addresses };
 }
 
 function normalizeInput(input) {
@@ -160,50 +187,139 @@ async function collectLimited(body, maxBytes) {
   return Buffer.concat(chunks, size);
 }
 
-async function fetchApproved(input, maxBytes, redirectCount = 0) {
-  const target = await validateTarget(input);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  let response;
-  try {
-    response = await fetch(target, {
+function readResponseCache(key) {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    responseCacheBytes -= entry.body.length;
+    return null;
+  }
+  responseCache.delete(key);
+  responseCache.set(key, entry);
+  return {
+    target: new URL(entry.target),
+    contentType: entry.contentType,
+    body: Buffer.from(entry.body),
+    status: entry.status,
+    cached: true
+  };
+}
+
+function writeResponseCache(key, result) {
+  const bodySize = result.body?.length || 0;
+  const isHtml = result.contentType.includes("text/html") || result.contentType.includes("application/xhtml+xml");
+  const maxItemBytes = isHtml ? 2 * 1024 * 1024 : 1024 * 1024;
+  if (!bodySize || bodySize > maxItemBytes || bodySize > RESPONSE_CACHE_MAX_BYTES) return;
+
+  const existing = responseCache.get(key);
+  if (existing) {
+    responseCacheBytes -= existing.body.length;
+    responseCache.delete(key);
+  }
+  const ttl = isHtml ? 30_000 : 10 * 60_000;
+  const entry = {
+    target: result.target.toString(),
+    contentType: result.contentType,
+    body: Buffer.from(result.body),
+    status: result.status,
+    expiresAt: Date.now() + ttl
+  };
+  responseCache.set(key, entry);
+  responseCacheBytes += entry.body.length;
+  while (responseCache.size > RESPONSE_CACHE_MAX_ENTRIES || responseCacheBytes > RESPONSE_CACHE_MAX_BYTES) {
+    const oldestKey = responseCache.keys().next().value;
+    const oldest = responseCache.get(oldestKey);
+    responseCache.delete(oldestKey);
+    responseCacheBytes -= oldest.body.length;
+  }
+}
+
+function requestPinned(target, addresses, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(value);
+    };
+
+    const selected = addresses.find((entry) => entry.family === 4) || addresses[0];
+    const request = https.request({
+      protocol: "https:",
+      hostname: target.hostname,
+      port: 443,
+      servername: target.hostname,
       method: "GET",
-      redirect: "manual",
-      signal: controller.signal,
+      path: target.pathname + target.search,
+      maxHeaderSize: 16 * 1024,
       headers: {
         "User-Agent": "Schoolmathtime-EducationalGateway/1.0",
         "Accept": "text/html, text/css, image/*, font/*, application/font-woff, application/vnd.ms-fontobject;q=0.8"
+      },
+      lookup: (_hostname, options, callback) => {
+        if (options && options.all) callback(null, addresses);
+        else callback(null, selected.address, selected.family);
       }
-    });
-  } catch (error) {
-    if (error && error.name === "AbortError") throw new Error("The remote website took too long to respond.");
-    throw new Error("Unable to fetch that website.");
-  } finally {
-    clearTimeout(timer);
-  }
+    }, (response) => {
+      const status = response.statusCode || 0;
+      const location = response.headers.location;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        response.resume();
+        response.once("end", () => finish(null, { status, location, headers: response.headers, body: Buffer.alloc(0) }));
+        response.once("error", (error) => finish(error));
+        return;
+      }
 
+      const declaredLength = Number(response.headers["content-length"] || 0);
+      if (declaredLength > maxBytes) {
+        response.destroy();
+        finish(new Error("The remote response is larger than the configured safety limit."));
+        return;
+      }
+      collectLimited(response, maxBytes).then((body) => {
+        finish(null, { status, headers: response.headers, body });
+      }).catch(finish);
+    });
+
+    const timeout = setTimeout(() => {
+      const error = new Error("The remote website took too long to respond.");
+      error.code = "ETIMEDOUT";
+      request.destroy(error);
+    }, FETCH_TIMEOUT_MS);
+    request.on("error", (error) => {
+      if (error.code === "ETIMEDOUT") finish(new Error("The remote website took too long to respond."));
+      else finish(new Error("Unable to fetch that website."));
+    });
+    request.end();
+  });
+}
+
+async function fetchApproved(input, maxBytes, redirectCount = 0) {
+  const { target, addresses } = await validateTarget(input);
+  const cacheKey = target.toString();
+  const cached = readResponseCache(cacheKey);
+  if (cached) return cached;
+
+  const response = await requestPinned(target, addresses, maxBytes);
   if ([301, 302, 303, 307, 308].includes(response.status)) {
-    const location = response.headers.get("location");
-    if (response.body) response.body.cancel().catch(() => {});
-    if (!location) throw new Error("The remote website sent an invalid redirect.");
+    if (!response.location) throw new Error("The remote website sent an invalid redirect.");
     if (redirectCount >= MAX_REDIRECTS) throw new Error("The website redirected too many times.");
-    const next = new URL(location, target).toString();
-    return fetchApproved(next, maxBytes, redirectCount + 1);
+    const next = new URL(response.location, target).toString();
+    const redirected = await fetchApproved(next, maxBytes, redirectCount + 1);
+    writeResponseCache(cacheKey, redirected);
+    return redirected;
   }
-  if (!response.ok) {
-    if (response.body) response.body.cancel().catch(() => {});
+  if (response.status < 200 || response.status >= 300) {
     throw new Error("The remote website returned HTTP " + response.status + ".");
   }
-
-  const contentType = (response.headers.get("content-type") || "").toLowerCase();
-  const declaredLength = Number(response.headers.get("content-length") || 0);
-  if (declaredLength > maxBytes) {
-    if (response.body) response.body.cancel().catch(() => {});
-    throw new Error("The remote response is larger than the configured safety limit.");
-  }
-  if (!response.body) throw new Error("The remote website returned an empty response.");
-  const body = await collectLimited(response.body, maxBytes);
-  return { target, contentType, body, status: response.status };
+  const contentType = String(response.headers["content-type"] || "").toLowerCase();
+  if (!response.body?.length) throw new Error("The remote website returned an empty response.");
+  const result = { target, contentType, body: response.body, status: response.status };
+  writeResponseCache(cacheKey, result);
+  return result;
 }
 
 function safeProxyPath(pathname, value) {
@@ -367,14 +483,14 @@ app.post("/login", loginLimiter, (req, res, next) => {
     req.session.authenticated = true;
     req.session.save((saveError) => {
       if (saveError) return next(saveError);
-      res.json({ authenticated: true, allowedHosts: ALLOWED_HOSTS });
+      res.json({ authenticated: true, allowedHosts: ALLOWED_HOSTS.filter((host) => host !== "*"), browseAllPublicDomains: ALLOWED_HOSTS.includes("*") });
     });
   });
 });
 
 app.get("/api/session", (req, res) => {
   res.set("Cache-Control", "no-store");
-  res.json({ authenticated: req.session?.authenticated === true, allowedHosts: req.session?.authenticated === true ? ALLOWED_HOSTS : [] });
+  res.json({ authenticated: req.session?.authenticated === true, allowedHosts: req.session?.authenticated === true ? ALLOWED_HOSTS.filter((host) => host !== "*") : [], browseAllPublicDomains: req.session?.authenticated === true && ALLOWED_HOSTS.includes("*") });
 });
 
 app.post("/logout", (req, res) => {
