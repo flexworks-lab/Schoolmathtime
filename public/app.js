@@ -5,6 +5,66 @@ const accessKey = document.querySelector("#accessKey");
 const loginMessage = document.querySelector("#loginMessage");
 const domainList = document.querySelector("#domainList");
 const targetInput = document.querySelector("#targetInput");
+const browserAddress = document.querySelector("#browserAddress");
+const browserNotice = document.querySelector("#browserNotice");
+const tabTitle = document.querySelector("#tabTitle");
+const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
+
+function announce(message) {
+  browserNotice.textContent = message;
+  browserNotice.hidden = false;
+  window.clearTimeout(announce.timeout);
+  announce.timeout = window.setTimeout(() => { browserNotice.hidden = true; }, 3800);
+}
+
+function getBookmarks() {
+  try {
+    const value = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((item) => item && typeof item.url === "string" && typeof item.title === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function addShortcut(container, label, url, index = 0, canRemove = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "shortcut";
+  const icon = document.createElement("span");
+  icon.className = "shortcut-icon";
+  icon.textContent = label.replace(/^www\./, "").slice(0, 1).toUpperCase();
+  const text = document.createElement("span");
+  text.className = "shortcut-label";
+  text.textContent = label;
+  button.append(icon, text);
+  button.title = url;
+  button.addEventListener("click", () => {
+    browserAddress.value = url;
+    targetInput.value = url;
+    navigate(url);
+  });
+  if (canRemove) {
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const bookmarks = getBookmarks();
+      bookmarks.splice(index, 1);
+      localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
+      renderBookmarks();
+      announce("Bookmark removed.");
+    });
+    button.title = url + " (right-click to remove)";
+  }
+  container.append(button);
+}
+
+function renderBookmarks() {
+  const savedSection = document.querySelector("#savedSection");
+  const savedList = document.querySelector("#savedList");
+  const bookmarks = getBookmarks();
+  savedList.replaceChildren();
+  savedSection.hidden = bookmarks.length === 0;
+  bookmarks.forEach((bookmark, index) => addShortcut(savedList, bookmark.title, bookmark.url, index, true));
+}
 
 function showApp(config) {
   loginPanel.hidden = true;
@@ -17,19 +77,18 @@ function showApp(config) {
     note.className = "muted";
     note.textContent = "No approved domains are configured. Ask the operator to update ALLOWED_HOSTS.";
     domainList.append(note);
-    return;
+  } else {
+    for (const host of domains) addShortcut(domainList, host, "https://" + host);
   }
-  for (const host of domains) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "domain-button";
-    button.textContent = host;
-    button.addEventListener("click", () => {
-      targetInput.value = "https://" + host;
-      document.querySelector("#browseForm").requestSubmit();
-    });
-    domainList.append(button);
-  }
+  renderBookmarks();
+  tabTitle.textContent = "New Tab — Schoolmathtime";
+  browserAddress.value = "";
+}
+
+function navigate(value) {
+  const url = String(value || "").trim();
+  if (!url) return;
+  window.location.assign("/browse?url=" + encodeURIComponent(url));
 }
 
 async function loadSession() {
@@ -39,7 +98,7 @@ async function loadSession() {
     const data = await response.json();
     if (data.authenticated) showApp(data);
   } catch {
-    // The login form remains available if the session endpoint is unreachable.
+    // Keep the access form available if the session endpoint is unreachable.
   }
 }
 
@@ -62,19 +121,78 @@ loginForm.addEventListener("submit", async (event) => {
     if (!response.ok) throw new Error(data.error || "Access could not be verified.");
     accessKey.value = "";
     showApp(data);
+    announce("You're signed in. Type a URL or search in the address bar.");
   } catch (error) {
     loginMessage.textContent = error.message || "Unable to connect. Try again.";
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = 'Continue <span aria-hidden="true">↗</span>';
+    submitButton.innerHTML = 'Unlock <span aria-hidden="true">↗</span>';
   }
+});
+
+document.querySelector("#addressForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const value = browserAddress.value.trim();
+  if (!value) return;
+  targetInput.value = value;
+  navigate(value);
 });
 
 document.querySelector("#browseForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const value = targetInput.value.trim();
   if (!value) return;
-  window.location.assign("/browse?url=" + encodeURIComponent(value));
+  browserAddress.value = value;
+  navigate(value);
+});
+
+document.querySelector("#clearSearchButton").addEventListener("click", () => {
+  targetInput.value = "";
+  targetInput.focus();
+});
+
+document.querySelector("#backButton").addEventListener("click", () => window.history.back());
+document.querySelector("#forwardButton").addEventListener("click", () => window.history.forward());
+document.querySelector("#refreshButton").addEventListener("click", () => window.location.reload());
+document.querySelector("#newTabButton").addEventListener("click", () => window.open("/", "_blank", "noopener"));
+document.querySelector("#closeTabButton").addEventListener("click", () => {
+  if (window.history.length > 1) window.history.back();
+  else announce("This is your start tab.");
+});
+document.querySelector("#browserMenuButton").addEventListener("click", () => {
+  announce("Schoolmathtime · Safe, read-only browsing for operator-approved sites.");
+});
+document.querySelector("#bookmarkButton").addEventListener("click", () => {
+  const candidate = browserAddress.value.trim();
+  if (!candidate || candidate === window.location.host || candidate.startsWith("schoolmathtime://")) {
+    announce("Open a page first, then bookmark it from the address bar.");
+    return;
+  }
+  let url;
+  try {
+    url = /^https?:\/\//i.test(candidate) ? new URL(candidate) : new URL("https://" + candidate);
+  } catch {
+    announce("Enter a full website address to bookmark it.");
+    return;
+  }
+  if (url.protocol !== "https:") {
+    announce("Only HTTPS pages can be bookmarked.");
+    return;
+  }
+  const bookmarks = getBookmarks();
+  const existing = bookmarks.findIndex((item) => item.url === url.toString());
+  if (existing >= 0) {
+    bookmarks.splice(existing, 1);
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
+    document.querySelector("#bookmarkButton").textContent = "☆";
+    announce("Bookmark removed.");
+  } else {
+    bookmarks.unshift({ title: url.hostname, url: url.toString() });
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks.slice(0, 18)));
+    document.querySelector("#bookmarkButton").textContent = "★";
+    announce("Bookmark saved. Right-click a saved bookmark to remove it.");
+  }
+  renderBookmarks();
 });
 
 document.querySelector("#logoutButton").addEventListener("click", async () => {
@@ -83,6 +201,15 @@ document.querySelector("#logoutButton").addEventListener("click", async () => {
   loginPanel.hidden = false;
   accessKey.value = "";
   targetInput.value = "";
+  browserAddress.value = "";
+  announce("You have signed out.");
+});
+
+browserAddress.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") browserAddress.value = "";
+});
+targetInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") targetInput.value = "";
 });
 
 loadSession();
