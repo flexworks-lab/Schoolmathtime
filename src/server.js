@@ -567,17 +567,24 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
     // Plain text is normalized to https://www.google.com/search?q=...;
     // then fetched and rendered through the same Schoolmathtime proxy as URLs.
     const target = normalizeInput(rawInput);
-    const result = await fetchApproved(target, MAX_PAGE_BYTES);
-    if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
-      return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
+    let html;
+    const youtubeInfo = getYouTubeVideoInfo(target);
+    if (youtubeInfo) {
+      // YouTube's app uses origin/browser APIs that do not survive HTML rewriting.
+      html = proxyDocument(createYouTubePlayerDocument(youtubeInfo), target, "");
+    } else {
+      const result = await fetchApproved(target, MAX_PAGE_BYTES);
+      if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
+        return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
+      }
+      html = proxyDocument(result.body.toString("utf8"), result.target.toString(), "");
     }
-    const html = proxyDocument(result.body.toString("utf8"), result.target.toString(), "");
     res.set({
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: wss:; object-src 'none'; frame-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; worker-src 'self' blob:"
+      "Content-Security-Policy": "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' https: wss:; object-src 'none'; frame-src https://*.youtube.com https://*.youtube-nocookie.com https://player.vimeo.com https://open.spotify.com https://w.soundcloud.com https://*.dailymotion.com https://player.twitch.tv https://clips.twitch.tv https://www.loom.com https://www.tiktok.com https://www.facebook.com https://player.bilibili.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; worker-src 'self' blob:"
     });
     res.status(200).send(html);
   } catch (error) {
