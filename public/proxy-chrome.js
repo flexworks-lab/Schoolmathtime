@@ -63,7 +63,7 @@
       (!raw.split("").some((character) => character.charCodeAt(0) <= 32) && raw.includes("."));
     const destination = isUrl
       ? raw
-      : "https://www.google.com/search?q=" + encodeURIComponent(raw);
+      : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(raw);
     window.location.assign("/browse?url=" + encodeURIComponent(destination));
   });
 
