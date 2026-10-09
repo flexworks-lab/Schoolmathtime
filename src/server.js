@@ -521,9 +521,13 @@ app.get("/api/session", (req, res) => {
 
 app.get("/search", requireLogin, fetchLimiter, (req, res) => {
   const query = String(req.query.q || "").trim().slice(0, 300);
-  const cseId = String(process.env.GOOGLE_CSE_ID || "").trim();
+  const configuredCseId = String(process.env.GOOGLE_CSE_ID || "").trim();
+  // The supplied Programmable Search Engine ID is a public identifier, not a secret.
+  // Use it by default so Render works immediately; a valid env var can override it.
+  const safeCseId = /^[a-zA-Z0-9:_-]{5,120}$/.test(configuredCseId)
+    ? configuredCseId
+    : "44c684ca968cf42a1";
   const safeQuery = escapeAttribute(query);
-  const safeCseId = /^[a-zA-Z0-9:_-]{5,120}$/.test(cseId) ? cseId : "";
   const searchWidget = safeCseId
     ? '<script async src="https://cse.google.com/cse.js?cx=' + encodeURIComponent(safeCseId) + '"></script><div class="gcse-searchresults-only" data-queryparametername="q"></div>'
     : '<div class="search-setup"><h2>Google Search is not connected yet</h2><p>To show Google results inside Schoolmathtime, add your Google Programmable Search Engine ID as the <code>GOOGLE_CSE_ID</code> environment variable in Render.</p><p>Create an engine at <a href="https://programmablesearchengine.google.com/" target="_blank" rel="noreferrer noopener">Google Programmable Search Engine</a>, enable searching the entire web, then copy its Search engine ID.</p></div>';
