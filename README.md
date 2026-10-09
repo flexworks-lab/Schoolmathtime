@@ -29,7 +29,7 @@ Open `http://localhost:3000`. The default example allowlist is intentionally sma
 
 ## Deployment
 
-Deploy as a Node web service (for example, Railway). Set `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS`, and optionally `PORT` as environment variables. Set `NODE_ENV=production` to enable secure session cookies; production must use HTTPS. A public deployment should use a strong random key and a small allowlist.
+Deploy as a Node web service (for example, Railway). Set `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS`, and optionally `PORT` as environment variables. Set `NODE_ENV=production` to enable secure session cookies; production must use HTTPS. If your host terminates TLS in front of Node, configure `TRUST_PROXY=1` so secure cookies work behind that trusted proxy. A public deployment should use a strong random key and a small allowlist.
 
 ## Current limitations
 
