@@ -59,13 +59,9 @@
     const raw = address ? address.value.trim() : "";
     if (!raw) return;
     event.preventDefault();
-    const isUrl = raw.startsWith("https://") || raw.startsWith("http://") ||
-      (!raw.split("").some((character) => character.charCodeAt(0) <= 32) && raw.includes("."));
-    if (isUrl) {
-      window.location.assign("/browse?url=" + encodeURIComponent(raw));
-    } else {
-      window.location.assign("/search?q=" + encodeURIComponent(raw));
-    }
+    // Send URLs and search phrases to /browse. The proxy converts plain
+    // text into a Google Search URL before fetching the remote page.
+    window.location.assign("/browse?url=" + encodeURIComponent(raw));
   });
 
   find("stm-back")?.addEventListener("click", () => window.history.back());
