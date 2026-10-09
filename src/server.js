@@ -353,6 +353,9 @@ function pumpYouTubeQueue(key, state) {
       upstreamQueues.delete(key);
     }
   });
+  // Start the next queued request after the configured gap, without waiting
+  // for this response body to finish first.
+  pumpYouTubeQueue(key, state);
 }
 
 function readResponseCache(key, allowStale = false) {
