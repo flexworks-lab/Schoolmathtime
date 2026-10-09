@@ -18,8 +18,9 @@ const MAX_RESOURCE_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_REDIRECTS = 5;
 const DNS_CACHE_TTL_MS = 30_000;
-const RESPONSE_CACHE_MAX_ENTRIES = 128;
-const RESPONSE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+// A ceiling only: memory is used as successful responses are cached, not reserved up front.
+const RESPONSE_CACHE_MAX_ENTRIES = 2048;
+const RESPONSE_CACHE_MAX_BYTES = 10 * 1024 * 1024 * 1024;
 const dnsCache = new Map();
 const responseCache = new Map();
 let responseCacheBytes = 0;
