@@ -450,7 +450,15 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     }
   });
 
-  const hostLabel = escapeAttribute(new URL(sourceUrl).hostname);
+  const source = new URL(sourceUrl);
+  const hostLabel = escapeAttribute(source.hostname);
+  // Google Search's native form must be routed back through the proxy. Since
+  // generic form actions are intentionally stripped, intercept Google search
+  // submits and construct a fresh Google URL instead of submitting to /browse
+  // as /browse?url=jk&sei=... .
+  if (/(^|\\.)google\\.com$/i.test(source.hostname) && source.pathname.startsWith("/search")) {
+    $("head").append('<script>(function(){document.addEventListener("submit",function(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();var target=new URL("https://www.google.com/search");target.searchParams.set("q",query);["tbm","hl","safe","num","start","udm"].forEach(function(name){var option=form.querySelector("[name=\\"+name+"\\"]");if(option&&option.value)target.searchParams.set(name,option.value)});window.location.assign("/browse?url="+encodeURIComponent(target.toString()))},true)})();</script>');
+  }
   const toolbar = `<div id="stm-browser-chrome" role="region" aria-label="Schoolmathtime browser controls">
     <div class="stm-tab-strip">
       <span class="stm-mini-logo" aria-hidden="true">S</span>
@@ -479,7 +487,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><script src="/proxy-chrome.js?v=google-proxy-native-1" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><script src="/proxy-chrome.js?v=google-search-form-fix-2" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("head").append('<meta name="referrer" content="no-referrer">');
@@ -520,12 +528,12 @@ app.get("/api/session", (req, res) => {
 });
 
 app.get("/search", requireLogin, (req, res) => {
-  // Compatibility route for older cached pages: send searches through the
-  // normal browser proxy, where normalizeInput maps text to Google Search.
+  // Compatibility route for cached pages: explicitly proxy Google's real search URL.
   const query = String(req.query.q || "").trim().slice(0, 300);
   if (!query) return res.redirect(302, "/");
+  const target = "https://www.google.com/search?q=" + encodeURIComponent(query);
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  return res.redirect(302, "/browse?url=" + encodeURIComponent(query));
+  return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
 });
 
 app.post("/logout", (req, res) => {
