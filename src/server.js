@@ -629,9 +629,15 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=toolbar-offset-3"><script src="/proxy-chrome.js?v=no-tabs-media-2" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=youtube-header-offset-1"><script src="/proxy-chrome.js?v=no-tabs-media-2" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
+  // Only apply the YouTube masthead offset when the upstream page actually
+  // contains YouTube's site header (not the custom video-player fallback).
+  if (/(^|\\.)youtube\\.com$/i.test(source.hostname) &&
+      $("ytd-app, ytm-app, #masthead-container, ytd-masthead, ytm-mobile-topbar-renderer").length) {
+    $("body").addClass("stm-proxied-youtube-page");
+  }
   $("body").addClass("stm-proxied-page");
   const originalBodyStyle = $("body").attr("style") || "";
   $("body").attr("style", [originalBodyStyle, "margin:0"].filter(Boolean).join(";"));
