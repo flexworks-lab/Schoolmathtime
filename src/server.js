@@ -479,7 +479,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><script src="/proxy-chrome.js?v=browser-ui-1" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=browser-ui-1"><script src="/proxy-chrome.js?v=google-search-fix-1" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("head").append('<meta name="referrer" content="no-referrer">');
