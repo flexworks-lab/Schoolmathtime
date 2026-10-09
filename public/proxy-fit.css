@@ -69,8 +69,8 @@ body :where(p, h1, h2, h3, h4, h5, h6, li, a, span, code, label) {
 }
 
 body.stm-proxied-page {
-  padding-top: 87px !important;
-  scroll-padding-top: 94px !important;
+  padding-top: 49px !important;
+  scroll-padding-top: 56px !important;
 }
 
 @media (max-width: 700px) {
