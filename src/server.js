@@ -379,6 +379,113 @@ function safeProxyPath(pathname, value) {
   return pathname + "?url=" + encodeURIComponent(value);
 }
 
+async function streamRemoteMedia(input, req, res, redirectCount = 0) {
+  if (redirectCount > MAX_REDIRECTS) {
+    if (!res.headersSent) res.status(502).end("The media source redirected too many times.");
+    return;
+  }
+  const { target, addresses } = await validateTarget(input);
+  await new Promise((resolve) => {
+    const selected = addresses.find((entry) => entry.family === 4) || addresses[0];
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "Accept": "video/*,audio/*,image/*,application/octet-stream;q=0.9,*/*;q=0.8",
+      "Accept-Encoding": "identity"
+    };
+    const range = String(req.headers.range || "");
+    if (/^bytes=\d*-\d*(?:,\d*-\d*)?$/.test(range)) headers.Range = range;
+    if (headers.Range && typeof req.headers["if-range"] === "string") {
+      headers["If-Range"] = req.headers["if-range"].slice(0, 300);
+    }
+
+    let timeout;
+    const request = https.request({
+      protocol: "https:",
+      hostname: target.hostname,
+      port: 443,
+      servername: target.hostname,
+      method: req.method === "HEAD" ? "HEAD" : "GET",
+      path: target.pathname + target.search,
+      maxHeaderSize: 16 * 1024,
+      agent: upstreamAgent,
+      headers,
+      lookup: (_hostname, options, callback) => {
+        if (options && options.all) callback(null, addresses);
+        else callback(null, selected.address, selected.family);
+      }
+    }, (upstream) => {
+      clearTimeout(timeout);
+      const status = upstream.statusCode || 502;
+      const location = upstream.headers.location;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        upstream.resume();
+        upstream.once("end", () => {
+          if (!location) {
+            if (!res.headersSent) res.status(502).end("The media source sent an invalid redirect.");
+            resolve();
+            return;
+          }
+          let next;
+          try { next = new URL(location, target).toString(); }
+          catch {
+            if (!res.headersSent) res.status(502).end("The media source sent an invalid redirect.");
+            resolve();
+            return;
+          }
+          streamRemoteMedia(next, req, res, redirectCount + 1).then(resolve).catch((error) => {
+            if (!res.headersSent) res.status(502).end(error.message || "Media could not be loaded.");
+            else res.destroy(error);
+            resolve();
+          });
+        });
+        return;
+      }
+
+      if (![200, 206, 416].includes(status)) {
+        upstream.resume();
+        if (!res.headersSent) res.status(status >= 400 ? status : 502).end("The media source returned HTTP " + status + ".");
+        resolve();
+        return;
+      }
+
+      res.status(status);
+      const contentType = String(upstream.headers["content-type"] || "application/octet-stream").split(";")[0];
+      res.set("Content-Type", contentType);
+      res.set("Accept-Ranges", upstream.headers["accept-ranges"] || "bytes");
+      for (const header of ["content-length", "content-range", "last-modified", "etag"]) {
+        const value = upstream.headers[header];
+        if (typeof value === "string" && !/[\r\n]/.test(value)) res.set(header, value);
+      }
+      res.set("Cache-Control", "private, max-age=120");
+      res.set("X-Content-Type-Options", "nosniff");
+      if (req.method === "HEAD" || status === 416) {
+        upstream.resume();
+        res.end();
+        resolve();
+        return;
+      }
+      upstream.on("error", (error) => {
+        if (!res.headersSent) res.status(502).end("The media stream failed.");
+        else res.destroy(error);
+        resolve();
+      });
+      res.on("close", () => upstream.destroy());
+      upstream.pipe(res);
+      upstream.once("end", resolve);
+    });
+
+    timeout = setTimeout(() => request.destroy(new Error("Media source timed out.")), FETCH_TIMEOUT_MS);
+    request.on("error", (error) => {
+      clearTimeout(timeout);
+      if (!res.headersSent) res.status(502).type("text/plain").send(error.message || "Media could not be loaded.");
+      else res.destroy(error);
+      resolve();
+    });
+    request.end();
+  });
+}
+
+
 function rewriteCss(css, sourceUrl) {
   const rewrite = (raw) => {
     const candidate = String(raw || "").trim().replace(/^['"]|['"]$/g, "");
@@ -589,6 +696,18 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
     res.status(200).send(html);
   } catch (error) {
     res.status(400).send(errorDocument(error.message || "The page could not be opened.", "Return home and choose another approved destination."));
+  }
+});
+
+app.all("/media", requireLogin, fetchLimiter, async (req, res) => {
+  if (!["GET", "HEAD"].includes(req.method)) return res.status(405).set("Allow", "GET, HEAD").end();
+  try {
+    const input = String(req.query.url || "");
+    if (!input) return res.status(400).type("text/plain").send("A media URL is required.");
+    await streamRemoteMedia(input, req, res);
+  } catch (error) {
+    if (!res.headersSent) res.status(502).type("text/plain").send(error.message || "Media could not be loaded.");
+    else res.destroy(error);
   }
 });
 
