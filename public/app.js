@@ -1,13 +1,7 @@
-const loginPanel = document.querySelector("#loginPanel");
-const appPanel = document.querySelector("#appPanel");
-const loginForm = document.querySelector("#loginForm");
-const accessKey = document.querySelector("#accessKey");
-const loginMessage = document.querySelector("#loginMessage");
 const domainList = document.querySelector("#domainList");
 const targetInput = document.querySelector("#targetInput");
 const browserAddress = document.querySelector("#browserAddress");
 const browserNotice = document.querySelector("#browserNotice");
-const tabTitle = document.querySelector("#tabTitle");
 const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
 
 function announce(message) {
@@ -20,10 +14,23 @@ function announce(message) {
 function getBookmarks() {
   try {
     const value = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || "[]");
-    return Array.isArray(value) ? value.filter((item) => item && typeof item.url === "string" && typeof item.title === "string") : [];
+    return Array.isArray(value)
+      ? value.filter((item) => item && typeof item.url === "string" && typeof item.title === "string")
+      : [];
   } catch {
     return [];
   }
+}
+
+function navigate(value) {
+  const query = String(value || "").trim();
+  if (!query) return;
+  const isUrl = query.startsWith("https://") || query.startsWith("http://") ||
+    (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
+  const destination = isUrl
+    ? query
+    : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
+  window.location.assign("/browse?url=" + encodeURIComponent(destination));
 }
 
 function addShortcut(container, label, url, index = 0, canRemove = false) {
@@ -63,87 +70,39 @@ function renderBookmarks() {
   const bookmarks = getBookmarks();
   savedList.replaceChildren();
   savedSection.hidden = bookmarks.length === 0;
-  bookmarks.forEach((bookmark, index) => addShortcut(savedList, bookmark.title, bookmark.url, index, true));
+  bookmarks.forEach((bookmark, index) =>
+    addShortcut(savedList, bookmark.title, bookmark.url, index, true)
+  );
 }
 
-function showApp(config) {
-  loginPanel.hidden = true;
-  appPanel.hidden = false;
-  loginMessage.textContent = "";
+function showHome(config = {}) {
   domainList.replaceChildren();
-  const domains = Array.isArray(config?.allowedHosts) ? config.allowedHosts : [];
-  if (config?.browseAllPublicDomains) {
+  const domains = Array.isArray(config.allowedHosts) ? config.allowedHosts : [];
+  if (config.browseAllPublicDomains) {
     const note = document.createElement("span");
     note.className = "muted";
-    note.textContent = "Any public HTTPS website can be entered in the address bar.";
+    note.textContent = "Any public HTTPS website can be entered.";
     domainList.append(note);
-    renderBookmarks();
-    tabTitle.textContent = "New Tab — Schoolmathtime";
-    browserAddress.value = "";
-    return;
-  }
-  if (!domains.length) {
-    const note = document.createElement("span");
-    note.className = "muted";
-    note.textContent = "No approved domains are configured. Ask the operator to update ALLOWED_HOSTS.";
-    domainList.append(note);
-  } else {
+  } else if (domains.length) {
     for (const host of domains) addShortcut(domainList, host, "https://" + host);
+  } else {
+    const note = document.createElement("span");
+    note.className = "muted";
+    note.textContent = "Enter a public HTTPS website above.";
+    domainList.append(note);
   }
   renderBookmarks();
-  tabTitle.textContent = "New Tab — Schoolmathtime";
-  browserAddress.value = "";
 }
 
-function navigate(value) {
-  const query = String(value || "").trim();
-  if (!query) return;
-  const isUrl = query.startsWith("https://") || query.startsWith("http://") ||
-    (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
-  const destination = isUrl
-    ? query
-    : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
-  window.location.assign("/browse?url=" + encodeURIComponent(destination));
-}
-
-async function loadSession() {
+async function loadHome() {
   try {
-    const response = await fetch("/api/session", { credentials: "same-origin" });
-    if (!response.ok) return;
-    const data = await response.json();
-    if (data.authenticated) showApp(data);
+    const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) throw new Error("Site settings are unavailable.");
+    showHome(await response.json());
   } catch {
-    // Keep the access form available if the session endpoint is unreachable.
+    showHome({ browseAllPublicDomains: true, allowedHosts: [] });
   }
 }
-
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const key = accessKey.value;
-  if (!key) return;
-  const submitButton = loginForm.querySelector("button[type=submit]");
-  submitButton.disabled = true;
-  submitButton.textContent = "Checking…";
-  loginMessage.textContent = "";
-  try {
-    const response = await fetch("/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ accessKey: key })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || "Access could not be verified.");
-    accessKey.value = "";
-    showApp(data);
-    announce("You're signed in. Type a URL or search in the address bar.");
-  } catch (error) {
-    loginMessage.textContent = error.message || "Unable to connect. Try again.";
-  } finally {
-    submitButton.disabled = false;
-    submitButton.innerHTML = 'Unlock <span aria-hidden="true">↗</span>';
-  }
-});
 
 document.querySelector("#addressForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -169,25 +128,22 @@ document.querySelector("#clearSearchButton").addEventListener("click", () => {
 document.querySelector("#backButton").addEventListener("click", () => window.history.back());
 document.querySelector("#forwardButton").addEventListener("click", () => window.history.forward());
 document.querySelector("#refreshButton").addEventListener("click", () => window.location.reload());
-document.querySelector("#newTabButton").addEventListener("click", () => window.open("/", "_blank", "noopener"));
-document.querySelector("#closeTabButton").addEventListener("click", () => {
-  if (window.history.length > 1) window.history.back();
-  else announce("This is your start tab.");
-});
+
 document.querySelector("#browserMenuButton").addEventListener("click", () => {
-  announce("Schoolmathtime · Safe, read-only browsing for operator-approved sites.");
+  announce("Schoolmathtime · Public HTTPS proxy with supported video embeds. Some sites restrict media playback.");
 });
+
 document.querySelector("#bookmarkButton").addEventListener("click", () => {
   const candidate = browserAddress.value.trim();
   if (!candidate || candidate === window.location.host || candidate.startsWith("schoolmathtime://")) {
-    announce("Open a page first, then bookmark it from the address bar.");
+    announce("Enter a website address first, then bookmark it.");
     return;
   }
   let url;
   try {
     url = /^https?:\/\//i.test(candidate) ? new URL(candidate) : new URL("https://" + candidate);
   } catch {
-    announce("Enter a full website address to bookmark it.");
+    announce("Enter a website address to bookmark it.");
     return;
   }
   if (url.protocol !== "https:") {
@@ -210,16 +166,6 @@ document.querySelector("#bookmarkButton").addEventListener("click", () => {
   renderBookmarks();
 });
 
-document.querySelector("#logoutButton").addEventListener("click", async () => {
-  try { await fetch("/logout", { method: "POST", credentials: "same-origin" }); } catch {}
-  appPanel.hidden = true;
-  loginPanel.hidden = false;
-  accessKey.value = "";
-  targetInput.value = "";
-  browserAddress.value = "";
-  announce("You have signed out.");
-});
-
 browserAddress.addEventListener("keydown", (event) => {
   if (event.key === "Escape") browserAddress.value = "";
 });
@@ -227,4 +173,4 @@ targetInput.addEventListener("keydown", (event) => {
   if (event.key === "Escape") targetInput.value = "";
 });
 
-loadSession();
+loadHome();
