@@ -100,17 +100,11 @@ function navigate(value) {
   if (!query) return;
   const isUrl = query.startsWith("https://") || query.startsWith("http://") ||
     (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
-  if (!isUrl) {
-    const googleUrl = "https://www.google.com/search?q=" + encodeURIComponent(query);
-    const opened = window.open(googleUrl, "_blank");
-    if (opened) {
-      opened.opener = null;
-      announce("Google Search opened in a new tab. Enter a result URL here to browse it through Schoolmathtime.");
-      return;
-    }
-    // Fall back to the server redirect if this browser blocks opening a new tab.
+  if (isUrl) {
+    window.location.assign("/browse?url=" + encodeURIComponent(query));
+  } else {
+    window.location.assign("/search?q=" + encodeURIComponent(query));
   }
-  window.location.assign("/browse?url=" + encodeURIComponent(query));
 }
 
 async function loadSession() {
