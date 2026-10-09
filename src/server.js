@@ -634,7 +634,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   // Only apply the YouTube masthead offset when the upstream page actually
   // contains YouTube's site header (not the custom video-player fallback).
-  if (/(^|\\.)youtube\\.com$/i.test(source.hostname) &&
+  if ((source.hostname === "youtube.com" || source.hostname.endsWith(".youtube.com")) &&
       $("ytd-app, ytm-app, #masthead-container, ytd-masthead, ytm-mobile-topbar-renderer").length) {
     $("body").addClass("stm-proxied-youtube-page");
   }
