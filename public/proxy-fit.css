@@ -73,6 +73,18 @@ body.stm-proxied-page {
   scroll-padding-top: 88px !important;
 }
 
+/* YouTube keeps its masthead fixed at the top of the viewport. Move that
+   header below Schoolmathtime's browser bar and reserve matching page space. */
+body.stm-proxied-youtube-page {
+  padding-top: 128px !important;
+  scroll-padding-top: 136px !important;
+}
+
+body.stm-proxied-youtube-page #masthead-container,
+body.stm-proxied-youtube-page ytm-mobile-topbar-renderer {
+  top: 48px !important;
+}
+
 @media (max-width: 700px) {
   body {
     font-size: max(12px, 0.94em);
