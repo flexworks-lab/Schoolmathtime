@@ -21,8 +21,15 @@ const DNS_CACHE_TTL_MS = 30_000;
 // A ceiling only: memory is used as successful responses are cached, not reserved up front.
 const RESPONSE_CACHE_MAX_ENTRIES = 1024;
 // Keep the cache bounded for memory-limited hosts such as Render. This is a
-// RAM ceiling, not preallocated storage; a multi-GB cache can restart the service.
-const RESPONSE_CACHE_MAX_BYTES = Number(process.env.RESPONSE_CACHE_MAX_BYTES || 256 * 1024 * 1024);
+// RAM ceiling, not preallocated storage. Ignore invalid values rather than
+// letting NaN/negative limits disable eviction or cause an empty-map crash.
+const DEFAULT_RESPONSE_CACHE_MAX_BYTES = 256 * 1024 * 1024;
+const MAX_RESPONSE_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const requestedCacheBytes = Number(process.env.RESPONSE_CACHE_MAX_BYTES);
+const RESPONSE_CACHE_MAX_BYTES = Number.isSafeInteger(requestedCacheBytes) &&
+  requestedCacheBytes >= 16 * 1024 * 1024
+  ? Math.min(requestedCacheBytes, MAX_RESPONSE_CACHE_MAX_BYTES)
+  : DEFAULT_RESPONSE_CACHE_MAX_BYTES;
 const UPSTREAM_COOLDOWN_MS = 2 * 60_000;
 const UPSTREAM_MAX_COOLDOWN_MS = 15 * 60_000;
 const YOUTUBE_REQUEST_GAP_MS = 350;
@@ -288,6 +295,7 @@ function cooldownError(key) {
   const seconds = Math.max(1, Math.ceil(((upstreamCooldowns.get(key) || Date.now()) - Date.now()) / 1000));
   const error = new Error("YouTube is temporarily rate-limiting requests. Schoolmathtime has paused requests; try again in about " + seconds + " seconds.");
   error.status = 429;
+  error.retryAfter = seconds;
   return error;
 }
 
@@ -471,8 +479,17 @@ function requestPinned(target, addresses, maxBytes) {
       request.destroy(error);
     }, FETCH_TIMEOUT_MS);
     request.on("error", (error) => {
-      if (error.code === "ETIMEDOUT") finish(new Error("The remote website took too long to respond."));
-      else finish(new Error("Unable to fetch that website."));
+      if (error.code === "ETIMEDOUT") {
+        const timeoutError = new Error("The remote website took too long to respond.");
+        timeoutError.code = "ETIMEDOUT";
+        timeoutError.status = 504;
+        finish(timeoutError);
+      } else {
+        const fetchError = new Error("Unable to fetch that website.");
+        fetchError.code = error.code || "UPSTREAM_FETCH_FAILED";
+        fetchError.status = 502;
+        finish(fetchError);
+      }
     });
     request.end();
   });
@@ -506,6 +523,8 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
     // timeout. Do not retry the origin here; use the bounded stale cache.
     const stale = readResponseCache(cacheKey, true);
     if (stale) return stale;
+    if (!Number.isInteger(error.status)) error.status = error.code === "ETIMEDOUT" ? 504 : 502;
+    error.upstreamHost = target.hostname;
     throw error;
   }
   if (response.status === 429) {
@@ -515,6 +534,8 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
     if (stale) return stale;
     const error = new Error("The remote website is temporarily rate-limiting requests (HTTP 429). Please wait before trying again.");
     error.status = 429;
+    error.upstreamHost = target.hostname;
+    error.retryAfter = Math.max(1, Math.ceil(((upstreamCooldowns.get(rateLimitKey) || Date.now() + UPSTREAM_COOLDOWN_MS) - Date.now()) / 1000));
     throw error;
   }
   if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -526,7 +547,10 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
     return redirected;
   }
   if (response.status < 200 || response.status >= 300) {
-    throw new Error("The remote website returned HTTP " + response.status + ".");
+    const error = new Error("The remote website returned HTTP " + response.status + ".");
+    error.status = response.status >= 400 && response.status <= 599 ? response.status : 502;
+    error.upstreamHost = target.hostname;
+    throw error;
   }
   const contentType = String(response.headers["content-type"] || "").toLowerCase();
   if (!response.body?.length) throw new Error("The remote website returned an empty response.");
@@ -904,7 +928,10 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     });
     res.status(200).send(html);
   } catch (error) {
-    res.status(400).send(errorDocument(error.message || "The page could not be opened.", "Return home and choose another approved destination."));
+    const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 400;
+    if (status === 429 && Number.isFinite(error.retryAfter)) res.set("Retry-After", String(error.retryAfter));
+    console.warn("Proxy /browse failed:", status, error.upstreamHost || "", error.message || "unknown error");
+    res.status(status).send(errorDocument(error.message || "The page could not be opened.", "Return home and try again, or choose another approved destination."));
   }
 });
 
@@ -915,7 +942,7 @@ app.all("/media", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     if (!input) return res.status(400).type("text/plain").send("A media URL is required.");
     await streamRemoteMedia(input, req, res);
   } catch (error) {
-    if (!res.headersSent) res.status(502).type("text/plain").send(error.message || "Media could not be loaded.");
+    if (!res.headersSent) res.status(Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 502).type("text/plain").send(error.message || "Media could not be loaded.");
     else res.destroy(error);
   }
 });
@@ -947,7 +974,10 @@ app.get("/resource", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     });
     res.status(200).send(body);
   } catch (error) {
-    res.status(400).type("text/plain").send(error.message || "Resource blocked.");
+    const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 400;
+    if (status === 429 && Number.isFinite(error.retryAfter)) res.set("Retry-After", String(error.retryAfter));
+    console.warn("Proxy /resource failed:", status, error.upstreamHost || "", error.message || "unknown error");
+    res.status(status).type("text/plain").send(error.message || "Resource blocked.");
   }
 });
 
@@ -963,7 +993,19 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: "An internal error occurred." });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Schoolmathtime listening on port " + PORT);
-  console.log("Approved host entries: " + ALLOWED_HOSTS.length);
-});
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log("Schoolmathtime listening on port " + PORT);
+    console.log("Approved host entries: " + ALLOWED_HOSTS.length);
+  });
+}
+
+module.exports = {
+  app,
+  normalizeInput,
+  getYouTubeVideoInfo,
+  isSupportedMediaFrame,
+  isAllowedHost,
+  isPublicAddress,
+  scheduleYouTubeRequest
+};
