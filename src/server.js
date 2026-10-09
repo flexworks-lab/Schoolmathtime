@@ -456,8 +456,8 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
   // generic form actions are intentionally stripped, intercept Google search
   // submits and construct a fresh Google URL instead of submitting to /browse
   // as /browse?url=jk&sei=... .
-  if (/(^|\\.)google\\.com$/i.test(source.hostname) && source.pathname.startsWith("/search")) {
-    $("head").append('<script>(function(){document.addEventListener("submit",function(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();var target=new URL("https://www.google.com/search");target.searchParams.set("q",query);["tbm","hl","safe","num","start","udm"].forEach(function(name){var option=form.querySelector("[name=\\"+name+"\\"]");if(option&&option.value)target.searchParams.set(name,option.value)});window.location.assign("/browse?url="+encodeURIComponent(target.toString()))},true)})();</script>');
+  if (/(^|\.)google\.com$/i.test(source.hostname) && source.pathname.startsWith("/search")) {
+    $("head").append('<script>(function(){document.addEventListener("submit",function(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();var target=new URL("https://www.google.com/search");target.searchParams.set("q",query);["tbm","hl","safe","num","start","udm"].forEach(function(name){var option=Array.prototype.find.call(form.elements,function(el){return el.name===name});if(option&&option.value)target.searchParams.set(name,option.value)});window.location.assign("/browse?url="+encodeURIComponent(target.toString()))},true)})();</script>');
   }
   const toolbar = `<div id="stm-browser-chrome" role="region" aria-label="Schoolmathtime browser controls">
     <div class="stm-tab-strip">
