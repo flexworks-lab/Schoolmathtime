@@ -72,6 +72,16 @@ function showApp(config) {
   loginMessage.textContent = "";
   domainList.replaceChildren();
   const domains = Array.isArray(config?.allowedHosts) ? config.allowedHosts : [];
+  if (config?.browseAllPublicDomains) {
+    const note = document.createElement("span");
+    note.className = "muted";
+    note.textContent = "Any public HTTPS website can be entered in the address bar.";
+    domainList.append(note);
+    renderBookmarks();
+    tabTitle.textContent = "New Tab — Schoolmathtime";
+    browserAddress.value = "";
+    return;
+  }
   if (!domains.length) {
     const note = document.createElement("span");
     note.className = "muted";
