@@ -5,19 +5,15 @@ A Reflect4-inspired browser-style web gateway. This is an independent project an
 ## Features
 
 - Browser-style tabs, navigation buttons, address bar, home page, and bookmarks.
-- Search results are displayed inside Schoolmathtime using a Google Programmable Search Element. Search-result links are routed back through the proxy.
+- Plain-text searches open Google's actual Search website through the Schoolmathtime proxy; website URLs are proxied the same way.
 - `ALLOWED_HOSTS=*` mode accepts any public HTTPS hostname. Alternatively, set a comma-separated host allowlist.
 - HTTPS connections are kept alive and reused. DNS lookups are cached for 30 seconds; successful HTML responses are cached for 30 seconds and small assets for up to 10 minutes.
 - DNS results are checked and pinned to public IP addresses. Redirects are revalidated; private/reserved addresses, localhost, internal hostnames, and non-standard HTTPS ports are blocked.
 - The server access key is checked server-side and login attempts are rate-limited.
 
-## Google search setup
+## Google search
 
-Google blocks ordinary server-side search fetches with a JavaScript verification page, so Schoolmathtime uses Google's browser-based Programmable Search Element to show results within its own search page.
-
-Schoolmathtime is preconfigured with the search engine ID supplied for this deployment, so no extra Render setting is required. To use a different engine, create one at https://programmablesearchengine.google.com/, configure it to search the entire web if that option is available, copy its Search engine ID (`cx`), and set `GOOGLE_CSE_ID` in Render.
-
-No Custom Search JSON API key is used by this embedded search element. Google result clicks are routed through Schoolmathtime where possible; Google account, consent, or other Google-hosted pages may still need to open directly.
+Entering a search phrase opens `https://www.google.com/search?q=...` through the normal Schoolmathtime proxy. The proxy fetches Google's page and rewrites supported links and resources to remain inside Schoolmathtime. Google may still return its own consent or automated-traffic verification page, and some Google features may not work through a server-side proxy.
 
 ## JavaScript compatibility and security
 
@@ -34,7 +30,7 @@ npm ci
 cp .env.example .env
 ```
 
-Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). Set `ALLOWED_HOSTS=*` for any public HTTPS hostnames, or provide a comma-separated allowlist. The included Google search engine ID is used by default; set `GOOGLE_CSE_ID` only if you want to override it. Then run:
+Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). Set `ALLOWED_HOSTS=*` for any public HTTPS hostnames, or provide a comma-separated allowlist. Then run:
 
 ```bash
 npm start
@@ -48,7 +44,7 @@ Create a **Web Service** from `flexworks-lab/Schoolmathtime`.
 
 - Build command: `npm ci`
 - Start command: `npm start`
-- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `NODE_ENV=production`, `TRUST_PROXY=1` (`GOOGLE_CSE_ID` is optional unless overriding the included search engine)
+- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `NODE_ENV=production`, `TRUST_PROXY=1`
 
 Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HOSTS` is already defined in Render, update that existing value to `*`; changing `.env.example` in GitHub does not replace Render's configured value.
 
