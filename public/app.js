@@ -98,8 +98,6 @@ function showApp(config) {
 function navigate(value) {
   const query = String(value || "").trim();
   if (!query) return;
-  const isUrl = query.startsWith("https://") || query.startsWith("http://") ||
-    (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
   // Plain text becomes a Google search URL on the server, then Google is
   // fetched through Schoolmathtime's proxy like any other website.
   window.location.assign("/browse?url=" + encodeURIComponent(query));
