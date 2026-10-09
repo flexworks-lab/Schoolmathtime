@@ -727,17 +727,14 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
       }
     } catch {}
     let html;
-    const youtubeInfo = getYouTubeVideoInfo(target);
-    if (youtubeInfo) {
-      // YouTube's app uses origin/browser APIs that do not survive HTML rewriting.
-      html = proxyDocument(createYouTubePlayerDocument(youtubeInfo), target, "");
-    } else {
-      const result = await fetchApproved(fetchTarget, MAX_PAGE_BYTES);
-      if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
-        return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
-      }
-      html = proxyDocument(result.body.toString("utf8"), result.target.toString(), "");
+    // Keep YouTube's original watch page and layout instead of replacing it with
+    // a standalone embed. This preserves the familiar player, title, channel,
+    // recommendations, and other watch-page UI as far as the proxy permits.
+    const result = await fetchApproved(fetchTarget, MAX_PAGE_BYTES);
+    if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
+      return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
     }
+    html = proxyDocument(result.body.toString("utf8"), result.target.toString(), "");
     res.set({
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
