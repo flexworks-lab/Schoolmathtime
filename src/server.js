@@ -927,12 +927,25 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     try {
       const parsed = new URL(target);
       const host = parsed.hostname.toLowerCase();
-      const isTikTok = host === "tiktok.com" || host.endsWith(".tiktok.com");
-      if (isTikTok && parsed.pathname === "/" && !parsed.search) {
-        parsed.hostname = "www.tiktok.com";
-        parsed.pathname = "/foryou";
-        parsed.searchParams.set("lang", "en");
-        fetchTarget = parsed.toString();
+      const isYouTube = host === "youtube.com" || host.endsWith(".youtube.com");
+      const isYouTubeResults = isYouTube && (parsed.pathname === "/results" || parsed.pathname === "/results/");
+      const searchQuery = String(parsed.searchParams.get("search_query") || "").trim();
+      if (isYouTubeResults && searchQuery) {
+        // YouTube often rate-limits search HTML fetched from shared server IPs.
+        // Use Google's video-search results scoped to YouTube links for mobile
+        // search; clicking a YouTube watch result opens the in-page video player.
+        const videoSearch = new URL("https://www.google.com/search");
+        videoSearch.searchParams.set("tbm", "vid");
+        videoSearch.searchParams.set("q", "site:youtube.com/watch " + searchQuery);
+        fetchTarget = videoSearch.toString();
+      } else {
+        const isTikTok = host === "tiktok.com" || host.endsWith(".tiktok.com");
+        if (isTikTok && parsed.pathname === "/" && !parsed.search) {
+          parsed.hostname = "www.tiktok.com";
+          parsed.pathname = "/foryou";
+          parsed.searchParams.set("lang", "en");
+          fetchTarget = parsed.toString();
+        }
       }
     } catch {}
 
