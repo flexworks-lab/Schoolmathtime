@@ -594,7 +594,8 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
             node.removeAttr(name);
             continue;
           }
-          node.attr(name, safeProxyPath("/resource", absolute.toString()));
+          const mediaElement = lower === "src" && ["video", "audio", "source", "track"].includes(element.tagName);
+          node.attr(name, safeProxyPath(mediaElement ? "/media" : "/resource", absolute.toString()));
           node.attr("referrerpolicy", "no-referrer");
         } catch { node.removeAttr(name); }
       }
@@ -628,7 +629,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=toolbar-offset-2"><script src="/proxy-chrome.js?v=no-tabs-media-1" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=toolbar-offset-2"><script src="/proxy-chrome.js?v=no-tabs-media-2" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   $("body").addClass("stm-proxied-page");
