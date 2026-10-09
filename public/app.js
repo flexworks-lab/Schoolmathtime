@@ -100,11 +100,9 @@ function navigate(value) {
   if (!query) return;
   const isUrl = query.startsWith("https://") || query.startsWith("http://") ||
     (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
-  if (isUrl) {
-    window.location.assign("/browse?url=" + encodeURIComponent(query));
-  } else {
-    window.location.assign("/search?q=" + encodeURIComponent(query));
-  }
+  // Plain text becomes a Google search URL on the server, then Google is
+  // fetched through Schoolmathtime's proxy like any other website.
+  window.location.assign("/browse?url=" + encodeURIComponent(query));
 }
 
 async function loadSession() {
