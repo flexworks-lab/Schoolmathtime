@@ -1,0 +1,172 @@
+/* First-party browser frame injected around proxied, sanitized pages. */
+#stm-browser-chrome,
+#stm-browser-chrome * {
+  box-sizing: border-box !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  letter-spacing: normal;
+  text-shadow: none !important;
+}
+#stm-browser-chrome {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 2147483647 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #e8eaed !important;
+  background: #202124 !important;
+  border: 0 !important;
+  border-bottom: 1px solid #101114 !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,.25) !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+}
+#stm-browser-chrome .stm-tab-strip {
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 7px !important;
+  height: 39px !important;
+  padding: 6px 10px 0 !important;
+  background: #17181b !important;
+}
+#stm-browser-chrome .stm-mini-logo {
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 24px !important;
+  width: 24px !important;
+  height: 24px !important;
+  margin: 0 4px 4px 0 !important;
+  border-radius: 50% !important;
+  color: #202124 !important;
+  background: #a8c7fa !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+#stm-browser-chrome .stm-tab {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 0 1 250px !important;
+  min-width: 0 !important;
+  max-width: 250px !important;
+  height: 32px !important;
+  padding: 0 8px 0 11px !important;
+  border-radius: 9px 9px 0 0 !important;
+  color: #e8eaed !important;
+  background: #202124 !important;
+  font-size: 12px !important;
+}
+#stm-browser-chrome .stm-tab-icon {
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 17px !important;
+  width: 17px !important;
+  height: 17px !important;
+  border-radius: 5px !important;
+  color: #202124 !important;
+  background: #a8c7fa !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+#stm-browser-chrome .stm-tab-title {
+  overflow: hidden !important;
+  flex: 1 !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+#stm-browser-chrome .stm-tab-close,
+#stm-browser-chrome .stm-new-tab,
+#stm-browser-chrome .stm-control {
+  display: inline-grid !important;
+  place-items: center !important;
+  flex: 0 0 30px !important;
+  width: 30px !important;
+  height: 30px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: #c5c8ce !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+}
+#stm-browser-chrome .stm-tab-close { flex-basis: 22px !important; width: 22px !important; height: 22px !important; font-size: 16px !important; }
+#stm-browser-chrome .stm-tab-close:hover,
+#stm-browser-chrome .stm-new-tab:hover,
+#stm-browser-chrome .stm-control:hover { color: white !important; background: #383a3f !important; }
+#stm-browser-chrome .stm-window-actions { display: flex !important; align-items: center !important; gap: 0 !important; margin-left: auto !important; }
+#stm-browser-chrome .stm-window-action { position: relative !important; display: block !important; width: 37px !important; height: 31px !important; }
+#stm-browser-chrome .stm-window-action::after { position: absolute !important; top: 50% !important; left: 50% !important; width: 10px !important; height: 1px !important; background: #bec1c6 !important; content: "" !important; transform: translate(-50%,-50%) !important; }
+#stm-browser-chrome .stm-window-action.square::after { width: 9px !important; height: 8px !important; border: 1px solid #bec1c6 !important; background: transparent !important; }
+#stm-browser-chrome .stm-window-action.close:hover { background: #c42b1c !important; }
+#stm-browser-chrome .stm-toolbar-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-height: 47px !important;
+  padding: 4px 12px 9px !important;
+  background: #202124 !important;
+}
+#stm-browser-chrome .stm-controls { display: flex !important; align-items: center !important; gap: 1px !important; }
+#stm-browser-chrome .stm-address-form {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 1 !important;
+  min-width: 70px !important;
+  height: 34px !important;
+  margin: 0 !important;
+  padding: 0 7px 0 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 20px !important;
+  background: #303134 !important;
+}
+#stm-browser-chrome .stm-address-form:focus-within { border-color: #6b8ac3 !important; background: #202124 !important; }
+#stm-browser-chrome .stm-address-security { color: #9aa0a6 !important; font-size: 14px !important; }
+#stm-browser-chrome .stm-address-form input {
+  display: block !important;
+  flex: 1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  color: #e8eaed !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+}
+#stm-browser-chrome .stm-address-go {
+  margin: 0 !important;
+  padding: 5px 10px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: #d6e2fa !important;
+  background: #394354 !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+#stm-browser-chrome .stm-browser-notice {
+  margin: 0 !important;
+  padding: 8px 15px !important;
+  border-top: 1px solid #3c4043 !important;
+  color: #d6e2fa !important;
+  background: #292f3a !important;
+  font-size: 12px !important;
+}
+@media (max-width: 560px) {
+  #stm-browser-chrome .stm-window-actions { display: none !important; }
+  #stm-browser-chrome .stm-toolbar-row { gap: 3px !important; padding-right: 6px !important; padding-left: 6px !important; }
+  #stm-browser-chrome .stm-control { flex-basis: 26px !important; width: 26px !important; height: 28px !important; }
+  #stm-browser-chrome .stm-controls .home { display: none !important; }
+  #stm-browser-chrome .stm-address-form { padding-left: 8px !important; }
+  #stm-browser-chrome .stm-new-tab { flex-basis: 23px !important; width: 23px !important; }
+}
