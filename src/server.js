@@ -157,7 +157,7 @@ async function validateTarget(input) {
   if (target.protocol !== "https:") throw new Error("Only HTTPS websites are supported.");
   if (target.port && target.port !== "443") throw new Error("Only standard HTTPS websites on port 443 are supported.");
   if (target.username || target.password) throw new Error("URLs containing credentials are not allowed.");
-  const hostname = target.hostname.toLowerCase().replace(/\\.$/, "");
+  const hostname = target.hostname.toLowerCase().replace(/\.$/, "");
   if (!hostname || net.isIP(hostname) || hostname === "localhost" ||
       hostname.endsWith(".localhost") || hostname.endsWith(".local") ||
       hostname.endsWith(".internal") || !hostname.includes(".") || !isAllowedHost(hostname)) {
@@ -193,8 +193,8 @@ function normalizeInput(input) {
   const value = String(input || "").trim();
   if (!value) throw new Error("Enter a URL or search phrase.");
   if (value.length > 2048) throw new Error("The URL or search phrase is too long.");
-  if (/^https?:\\/\\//i.test(value)) return value;
-  if (/^[a-z0-9.-]+(?::\\d+)?(?:\\/.*)?$/i.test(value) && value.includes(".") && !/\\s/.test(value)) {
+  if (value.startsWith("https://") || value.startsWith("http://")) return value;
+  if (!/\s/.test(value) && value.includes(".")) {
     return "https://" + value;
   }
   return "https://www.google.com/search?q=" + encodeURIComponent(value);
