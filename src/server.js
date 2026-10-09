@@ -310,7 +310,7 @@ function requestPinned(target, addresses, maxBytes) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html, text/css, image/*, font/*, application/font-woff, application/vnd.ms-fontobject;q=0.8"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/css,*/*;q=0.8"
       },
       lookup: (_hostname, options, callback) => {
         if (options && options.all) callback(null, addresses);
@@ -629,7 +629,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=youtube-header-offset-1"><script src="/proxy-chrome.js?v=no-tabs-media-2" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=layout-preserve-2"><script src="/proxy-chrome.js?v=no-tabs-media-2" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   // Only apply the YouTube masthead offset when the upstream page actually
