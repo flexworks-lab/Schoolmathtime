@@ -379,7 +379,7 @@ function rewriteCss(css, sourceUrl) {
 
 function proxyDocument(remoteHtml, sourceUrl, origin) {
   const $ = cheerio.load(remoteHtml);
-  $("script, noscript, iframe, frame, frameset, object, embed, applet, form, base, portal").remove();
+  $("noscript, iframe, frame, frameset, object, embed, applet, base, portal").remove();
   $("meta[http-equiv]").remove();
   $("link[rel='modulepreload'], link[rel='preload'], link[rel='prefetch'], link[rel='prerender']").remove();
   $("*").each((_, element) => {
@@ -388,7 +388,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     for (const [name, originalValue] of Object.entries(attrs)) {
       const lower = name.toLowerCase();
       const value = String(originalValue || "").trim();
-      if (lower.startsWith("on") || ["srcdoc", "action", "formaction", "integrity", "nonce", "crossorigin"].includes(lower)) {
+      if (["srcdoc", "action", "formaction", "integrity", "nonce", "crossorigin"].includes(lower)) {
         node.removeAttr(name);
         continue;
       }
@@ -539,7 +539,7 @@ app.get("/browse", requireLogin, fetchLimiter, async (req, res) => {
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'self' data: blob:; script-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "Content-Security-Policy": "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: wss:; object-src 'none'; frame-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; worker-src 'self' blob:"
     });
     res.status(200).send(html);
   } catch (error) {
@@ -552,9 +552,18 @@ app.get("/resource", requireLogin, fetchLimiter, async (req, res) => {
     const result = await fetchApproved(String(req.query.url || ""), MAX_RESOURCE_BYTES);
     const type = result.contentType.split(";")[0].trim();
     const css = type === "text/css";
-    const allowed = css || type.startsWith("image/") || type.startsWith("font/") ||
+    const javascript = [
+      "application/javascript",
+      "text/javascript",
+      "application/ecmascript",
+      "text/ecmascript",
+      "application/x-javascript"
+    ].includes(type);
+    const wasm = type === "application/wasm";
+    const allowed = css || javascript || wasm || type.startsWith("image/") || type.startsWith("font/") ||
+      type.startsWith("audio/") || type.startsWith("video/") ||
       ["application/font-woff", "application/vnd.ms-fontobject", "application/x-font-ttf", "application/octet-stream"].includes(type) &&
-      /\.(?:woff2?|ttf|otf|eot)(?:$|\?)/i.test(result.target.pathname + result.target.search);
+      /\.(?:woff2?|ttf|otf|eot|wasm)(?:$|\?)/i.test(result.target.pathname + result.target.search);
     if (!allowed) return res.status(415).send("Resource type blocked.");
     const body = css ? rewriteCss(result.body.toString("utf8"), result.target.toString()) : result.body;
     res.set({
