@@ -686,7 +686,9 @@ app.get("/search", allowPublicBrowsing, (req, res) => {
 app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
   try {
     const rawInput = String(req.query.url || "").trim();
-    if (!rawInput) throw new Error("Enter a URL or search phrase.");
+    // Opening /browse directly without a destination should return to the app,
+    // not produce an error page that can be mistaken for a broken route.
+    if (!rawInput) return res.redirect(302, "/");
 
     // Plain text is normalized to https://www.google.com/search?q=...;
     // then fetched and rendered through the same Schoolmathtime proxy as URLs.
