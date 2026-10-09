@@ -11,9 +11,11 @@ A Reflect4-inspired browser-style web gateway. This is an independent project an
 - DNS results are checked and pinned to public IP addresses. Redirects are revalidated; private/reserved addresses, localhost, internal hostnames, and non-standard HTTPS ports are blocked.
 - The server access key is checked server-side and login attempts are rate-limited.
 
-## Important compatibility note
+## JavaScript compatibility and security
 
-This gateway deliberately removes remote scripts, forms, frames, and embedded objects. It can display many public pages, but websites that require JavaScript or interactive forms will not work fully. The proxy does not bypass a destination site's login, paywall, or other access controls. Wildcard mode broadens which public HTTPS websites may be fetched, so keep the access key private and only deploy it where you have permission to use it.
+Proxied JavaScript is enabled, including inline scripts and common JavaScript resource types. Forms, frames, and embedded objects remain disabled. Some sites may still fail if they rely on module imports, API calls, strict origin checks, service workers, or other browser features that this gateway cannot fully translate.
+
+**Security note:** Third-party scripts execute in the Schoolmathtime origin. Only browse sites you trust, and avoid using sensitive accounts or entering personal data on proxied pages. Keep the access key private. The gateway does not bypass a destination site's login, paywall, or other access controls.
 
 ## Run locally
 
@@ -44,4 +46,4 @@ Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HO
 
 ## Limits
 
-The short-lived caches are stored in memory and are cleared when the service restarts. Free hosting plans can sleep or have limited CPU/network capacity, so they cannot guarantee instant first loads. Dynamic websites may remain incomplete because remote scripts and forms are disabled.
+The short-lived caches are stored in memory and are cleared when the service restarts. Free hosting plans can sleep or have limited CPU/network capacity, so they cannot guarantee instant first loads. Dynamic websites may remain incomplete where their behavior depends on browser APIs this proxy does not translate.
