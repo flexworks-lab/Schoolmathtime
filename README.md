@@ -15,11 +15,7 @@ A Reflect4-inspired browser-style web gateway. This is an independent project an
 
 Google blocks ordinary server-side search fetches with a JavaScript verification page, so Schoolmathtime uses Google's browser-based Programmable Search Element to show results within its own search page.
 
-1. Create a Programmable Search Engine at https://programmablesearchengine.google.com/.
-2. Configure the engine to search the entire web (if that option is available in the engine settings).
-3. Copy its Search engine ID (`cx`).
-4. In Render, open the Schoolmathtime service, go to **Environment**, and add `GOOGLE_CSE_ID` with that ID.
-5. Save and redeploy.
+Schoolmathtime is preconfigured with the search engine ID supplied for this deployment, so no extra Render setting is required. To use a different engine, create one at https://programmablesearchengine.google.com/, configure it to search the entire web if that option is available, copy its Search engine ID (`cx`), and set `GOOGLE_CSE_ID` in Render.
 
 No Custom Search JSON API key is used by this embedded search element. Google result clicks are routed through Schoolmathtime where possible; Google account, consent, or other Google-hosted pages may still need to open directly.
 
@@ -38,7 +34,7 @@ npm ci
 cp .env.example .env
 ```
 
-Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). Set `ALLOWED_HOSTS=*` for any public HTTPS hostnames, or provide a comma-separated allowlist. Set `GOOGLE_CSE_ID` to the ID of your Programmable Search Engine. Then run:
+Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). Set `ALLOWED_HOSTS=*` for any public HTTPS hostnames, or provide a comma-separated allowlist. The included Google search engine ID is used by default; set `GOOGLE_CSE_ID` only if you want to override it. Then run:
 
 ```bash
 npm start
@@ -52,7 +48,7 @@ Create a **Web Service** from `flexworks-lab/Schoolmathtime`.
 
 - Build command: `npm ci`
 - Start command: `npm start`
-- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `GOOGLE_CSE_ID`, `NODE_ENV=production`, `TRUST_PROXY=1`
+- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `NODE_ENV=production`, `TRUST_PROXY=1` (`GOOGLE_CSE_ID` is optional unless overriding the included search engine)
 
 Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HOSTS` is already defined in Render, update that existing value to `*`; changing `.env.example` in GitHub does not replace Render's configured value.
 
