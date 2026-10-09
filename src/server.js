@@ -18,8 +18,8 @@ const MAX_RESOURCE_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_REDIRECTS = 5;
 const DNS_CACHE_TTL_MS = 30_000;
-const RESPONSE_CACHE_MAX_ENTRIES = 96;
-const RESPONSE_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const RESPONSE_CACHE_MAX_ENTRIES = 128;
+const RESPONSE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const dnsCache = new Map();
 const responseCache = new Map();
 let responseCacheBytes = 0;
@@ -242,8 +242,8 @@ function readResponseCache(key, allowStale = false) {
   const entry = responseCache.get(key);
   if (!entry) return null;
   const now = Date.now();
-  if (entry.expiresAt <= now && (!allowStale || entry.staleUntil <= now)) {
-    if (entry.staleUntil <= now) {
+  if (entry.expiresAt <= now && (!allowStale || (entry.staleUntil || entry.expiresAt) <= now)) {
+    if ((entry.staleUntil || entry.expiresAt) <= now) {
       responseCache.delete(key);
       responseCacheBytes -= entry.body.length;
     }
@@ -265,7 +265,7 @@ function readResponseCache(key, allowStale = false) {
 function writeResponseCache(key, result) {
   const bodySize = result.body?.length || 0;
   const isHtml = result.contentType.includes("text/html") || result.contentType.includes("application/xhtml+xml");
-  const maxItemBytes = isHtml ? 2 * 1024 * 1024 : 1024 * 1024;
+  const maxItemBytes = isHtml ? MAX_PAGE_BYTES : 2 * 1024 * 1024;
   if (!bodySize || bodySize > maxItemBytes || bodySize > RESPONSE_CACHE_MAX_BYTES) return;
 
   const existing = responseCache.get(key);
@@ -273,13 +273,16 @@ function writeResponseCache(key, result) {
     responseCacheBytes -= existing.body.length;
     responseCache.delete(key);
   }
-  const ttl = isHtml ? 30_000 : 10 * 60_000;
+  const ttl = isHtml ? 2 * 60_000 : 30 * 60_000;
   const entry = {
     target: result.target.toString(),
     contentType: result.contentType,
     body: Buffer.from(result.body),
     status: result.status,
-    expiresAt: Date.now() + ttl
+    expiresAt: Date.now() + ttl,
+    // Keep successful pages available for fallback during temporary upstream
+    // throttling or timeouts. This is a stale-cache window, not a retry loop.
+    staleUntil: Date.now() + ttl + (isHtml ? 6 * 60 * 60_000 : 24 * 60 * 60_000)
   };
   responseCache.set(key, entry);
   responseCacheBytes += entry.body.length;
