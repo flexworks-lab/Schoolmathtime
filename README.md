@@ -5,11 +5,23 @@ A Reflect4-inspired browser-style web gateway. This is an independent project an
 ## Features
 
 - Browser-style tabs, navigation buttons, address bar, home page, and bookmarks.
-- Plain-text searches open Google Search directly in a new browser tab. Google blocks the server-side fetch with a JavaScript interstitial, so searches are opened in the real browser instead of leaving a stalled proxy page.
+- Search results are displayed inside Schoolmathtime using a Google Programmable Search Element. Search-result links are routed back through the proxy.
 - `ALLOWED_HOSTS=*` mode accepts any public HTTPS hostname. Alternatively, set a comma-separated host allowlist.
 - HTTPS connections are kept alive and reused. DNS lookups are cached for 30 seconds; successful HTML responses are cached for 30 seconds and small assets for up to 10 minutes.
 - DNS results are checked and pinned to public IP addresses. Redirects are revalidated; private/reserved addresses, localhost, internal hostnames, and non-standard HTTPS ports are blocked.
 - The server access key is checked server-side and login attempts are rate-limited.
+
+## Google search setup
+
+Google blocks ordinary server-side search fetches with a JavaScript verification page, so Schoolmathtime uses Google's browser-based Programmable Search Element to show results within its own search page.
+
+1. Create a Programmable Search Engine at https://programmablesearchengine.google.com/.
+2. Configure the engine to search the entire web (if that option is available in the engine settings).
+3. Copy its Search engine ID (`cx`).
+4. In Render, open the Schoolmathtime service, go to **Environment**, and add `GOOGLE_CSE_ID` with that ID.
+5. Save and redeploy.
+
+No Custom Search JSON API key is used by this embedded search element. Google result clicks are routed through Schoolmathtime where possible; Google account, consent, or other Google-hosted pages may still need to open directly.
 
 ## JavaScript compatibility and security
 
@@ -26,7 +38,7 @@ npm ci
 cp .env.example .env
 ```
 
-Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). The example file sets `ALLOWED_HOSTS=*` to allow public HTTPS hostnames. Change it to a comma-separated list to restrict access. Then run:
+Set unique values for `PROXY_ACCESS_KEY` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). Set `ALLOWED_HOSTS=*` for any public HTTPS hostnames, or provide a comma-separated allowlist. Set `GOOGLE_CSE_ID` to the ID of your Programmable Search Engine. Then run:
 
 ```bash
 npm start
@@ -40,9 +52,9 @@ Create a **Web Service** from `flexworks-lab/Schoolmathtime`.
 
 - Build command: `npm ci`
 - Start command: `npm start`
-- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `NODE_ENV=production`, `TRUST_PROXY=1`
+- Environment variables: `PROXY_ACCESS_KEY`, `SESSION_SECRET`, `ALLOWED_HOSTS=*`, `GOOGLE_CSE_ID`, `NODE_ENV=production`, `TRUST_PROXY=1`
 
-Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HOSTS` is already defined in Render, update that existing value to `*` and redeploy; changing `.env.example` in GitHub does not replace Render's configured value.
+Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HOSTS` is already defined in Render, update that existing value to `*`; changing `.env.example` in GitHub does not replace Render's configured value.
 
 ## Limits
 
