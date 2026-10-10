@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Schoolmathtime Browser</title>
+  <link rel="stylesheet" href="/ultraviolet.css">
+  <script src="/baremux/index.js" defer></script>
+  <script src="/uv/uv.bundle.js" defer></script>
+  <script src="/uv/uv.config.js" defer></script>
+  <script src="/ultraviolet.js" defer></script>
+</head>
+<body>
+  <header class="uv-toolbar">
+    <a class="uv-brand" href="/" aria-label="Schoolmathtime home">Schoolmathtime</a>
+    <button id="uv-back" class="uv-icon" type="button" title="Back" aria-label="Back">←</button>
+    <button id="uv-forward" class="uv-icon" type="button" title="Forward" aria-label="Forward">→</button>
+    <button id="uv-refresh" class="uv-icon" type="button" title="Reload" aria-label="Reload">↻</button>
+    <form id="uv-address-form" class="uv-address-form">
+      <label class="sr-only" for="uv-address">Search or enter an HTTPS website</label>
+      <input id="uv-address" type="text" placeholder="Search or enter an HTTPS website" autocomplete="url" spellcheck="false">
+      <button type="submit">Go</button>
+    </form>
+    <button id="uv-bookmark" class="uv-icon" type="button" title="Bookmark this page" aria-label="Bookmark this page">☆</button>
+    <a class="uv-home" href="/">Home</a>
+  </header>
+  <div class="uv-status-row">
+    <span id="uv-status" role="status" aria-live="polite">Enter an HTTPS website or a search term to start browsing.</span>
+    <div class="uv-actions">
+      <button id="uv-classic" type="button">Use classic browser</button>
+      <button id="uv-copy-error" type="button" hidden>Copy error</button>
+    </div>
+  </div>
+  <pre id="uv-error" class="uv-error" hidden tabindex="0"></pre>
+  <main class="uv-stage">
+    <iframe id="uv-frame" title="Proxied website" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    <div id="uv-welcome" class="uv-welcome">
+      <div class="uv-welcome-mark">S</div>
+      <h1>Browse with Ultraviolet</h1>
+      <p>Enter an HTTPS address or search term above. The classic Schoolmathtime browser remains available as a fallback.</p>
+    </div>
+  </main>
+</body>
+</html>
