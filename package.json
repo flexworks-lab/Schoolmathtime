@@ -22,6 +22,6 @@
     "@mercuryworkshop/bare-mux": "2.1.8",
     "@mercuryworkshop/epoxy-transport": "2.1.28",
     "@titaniumnetwork-dev/ultraviolet": "3.2.10",
-    "@mercuryworkshop/wisp-js": "0.4.0"
+    "@mercuryworkshop/wisp-js": "0.5.0"
   }
 }
