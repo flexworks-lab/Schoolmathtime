@@ -46,6 +46,17 @@
     if (!navigator.serviceWorker) throw new Error("This browser does not support service workers. Open Schoolmathtime over HTTPS in a compatible browser.");
     if (typeof BareMux === "undefined") throw new Error("Ultraviolet transport files did not load.");
     if (typeof __uv$config === "undefined") throw new Error("Ultraviolet configuration did not load.");
+
+    // Rebuild the Epoxy transport on every top-level navigation. BareMux's
+    // getTransport() only reports the transport name; it cannot tell whether
+    // the underlying Wisp multiplexor has died, which leaves retries stuck on
+    // MuxTaskEnded. Set the transport before the service worker becomes ready,
+    // as recommended by BareMux, so its first proxied request has a live client.
+    if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js");
+    const transport = "/epoxy/index.mjs?build=wisp-mux-reset-1";
+    const wispUrl = "wss://" + location.host + "/wisp/";
+    await connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]);
+
     // The worker is deliberately scoped to /uv/, which covers proxied
     // iframe URLs but not /ultraviolet.html itself. Do not await
     // navigator.serviceWorker.ready here: ready waits for a registration
@@ -83,12 +94,6 @@
         worker.addEventListener("statechange", onStateChange);
         onStateChange();
       });
-    }
-    if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js");
-    const transport = "/epoxy/index.mjs";
-    if (await connection.getTransport() !== transport) {
-      const wispUrl = "wss://" + location.host + "/wisp/";
-      await connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]);
     }
   }
 
@@ -155,8 +160,8 @@
     try { frame.contentWindow.history.forward(); } catch { history.forward(); }
   });
   byId("uv-refresh").addEventListener("click", () => {
-    if (!hasLoaded) { if (address.value.trim()) void openTarget(address.value, false); return; }
-    try { frame.contentWindow.location.reload(); } catch { frame.src = frame.src; }
+    if (address.value.trim()) void openTarget(address.value, false);
+    else location.reload();
   });
   byId("uv-classic").addEventListener("click", () => {
     const target = currentTarget() || lastTarget || address.value.trim();
