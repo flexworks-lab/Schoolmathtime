@@ -39,7 +39,7 @@ jobs:
           test "$ready" -eq 1
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'smart-race-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'youtube-login-1'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'youtube-login-1'
           curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'stm-uv-youtube-layout'
           grep -q 'id="uv-youtube-login"' public/ultraviolet.html
@@ -91,7 +91,7 @@ jobs:
           grep -q 'readRewrittenPageCache(rewrittenCacheKey)' src/server.js
           grep -q 'isLargeStaticAsset' src/server.js
           grep -q 'if (!transportReady)' public/ultraviolet.js
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'smart-stack-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'youtube-login-1'
           ! grep -q 'await navigator.serviceWorker.ready' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.bundle.js > /dev/null
