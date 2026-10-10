@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("node:path");
+const { createServer } = require("node:http");
 const dns = require("node:dns").promises;
 const net = require("node:net");
 const https = require("node:https");
@@ -51,6 +52,7 @@ const youtubeSearchCache = new Map();
 let youtubeSearchWindowStartedAt = Date.now();
 let youtubeSearchApiCalls = 0;
 let responseCacheBytes = 0;
+let ultravioletReady = false;
 
 function parseAllowedHosts(value) {
   return [...new Set(String(value || "").split(",").map((item) =>
@@ -76,7 +78,7 @@ app.use(helmet({ contentSecurityPolicy: {
     scriptSrc: ["'self'"],
     styleSrc: ["'self'"],
     imgSrc: ["'self'", "data:"],
-    connectSrc: ["'self'"],
+    connectSrc: ["'self'", "ws:", "wss:"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     frameAncestors: ["'none'"]
@@ -864,7 +866,7 @@ function escapeAttribute(value) {
 
 app.use(express.static(path.join(__dirname, "..", "public"), { index: "index.html", maxAge: process.env.NODE_ENV === "production" ? "1h" : 0 }));
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.json({ ok: true, ultraviolet: ultravioletReady }));
 
 app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async (req, res) => {
   res.set("Cache-Control", "no-store");
@@ -961,7 +963,7 @@ app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async 
         thumbnail: thumbnail ? "/resource?url=" + encodeURIComponent(thumbnail) : "",
         // Keep the navigation on Schoolmathtime; don't send a new tab directly
         // to YouTube and don't put an API key in any browser-visible URL.
-        watchUrl: "/browse?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id)
+        watchUrl: "/ultraviolet.html?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id)
       }];
     });
 
@@ -994,7 +996,7 @@ app.get("/search", allowPublicBrowsing, (req, res) => {
   if (!query) return res.redirect(302, "/");
   const target = "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
+  return res.redirect(302, "/ultraviolet.html?url=" + encodeURIComponent(target));
 });
 
 app.get("/youtube-player", allowPublicBrowsing, (req, res) => {
@@ -1006,7 +1008,7 @@ app.get("/youtube-player", allowPublicBrowsing, (req, res) => {
   }
   const target = "https://www.youtube.com/watch?v=" + encodeURIComponent(videoId);
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
+  return res.redirect(302, "/ultraviolet.html?url=" + encodeURIComponent(target));
 });
 
 app.get("/watch", allowPublicBrowsing, (req, res) => {
@@ -1024,7 +1026,7 @@ app.get("/watch", allowPublicBrowsing, (req, res) => {
   if (!params.get("v")) return res.redirect(302, "/");
   const target = "https://www.youtube.com/watch?" + params.toString();
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
+  return res.redirect(302, "/ultraviolet.html?url=" + encodeURIComponent(target));
 });
 
 app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
@@ -1149,10 +1151,100 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: "An internal error occurred." });
 });
 
-if (require.main === module) {
+async function startServer() {
+  const server = createServer();
+  let wispServer = null;
+  let activeWispConnections = 0;
+  const MAX_WISP_CONNECTIONS = 80;
+
+  try {
+    const [uvModule, epoxyModule, baremuxModule, wispModule] = await Promise.all([
+      import("@titaniumnetwork-dev/ultraviolet"),
+      import("@mercuryworkshop/epoxy-transport"),
+      import("@mercuryworkshop/bare-mux/node"),
+      import("@mercuryworkshop/wisp-js/server")
+    ]);
+    const uvPath = uvModule.uvPath;
+    const epoxyPath = epoxyModule.epoxyPath;
+    const baremuxPath = baremuxModule.baremuxPath;
+    wispServer = wispModule.server;
+    if (!uvPath || !epoxyPath || !baremuxPath || !wispServer ||
+        typeof wispServer.routeRequest !== "function") {
+      throw new Error("A required Ultraviolet/Wisp package export is missing.");
+    }
+
+    // Bound the tunnel to HTTPS and deny private/loopback IP targets. If
+    // ALLOWED_HOSTS is explicit, apply the same host restrictions to Wisp.
+    wispServer.options.allow_direct_ip = false;
+    wispServer.options.allow_private_ips = false;
+    wispServer.options.allow_loopback_ips = false;
+    wispServer.options.allow_udp_streams = false;
+    wispServer.options.allow_tcp_streams = true;
+    wispServer.options.port_whitelist = [443];
+    wispServer.options.stream_limit_per_host = 8;
+    wispServer.options.stream_limit_total = 32;
+    if (!ALLOWED_HOSTS.includes("*")) {
+      wispServer.options.hostname_whitelist = ALLOWED_HOSTS.map((host) => {
+        const escaped = host.replace(/[.+?^$()|[\]\\]/g, "\\if (require.main === module) {
   app.listen(PORT, "0.0.0.0", () => {
     console.log("Schoolmathtime listening on port " + PORT);
     console.log("Approved host entries: " + ALLOWED_HOSTS.length);
+  });
+}");
+        return new RegExp("^(?:[^.]+\\.)*" + escaped + "$", "i");
+      });
+    }
+
+    // The local config takes precedence over package assets; other UV, Epoxy,
+    // and BareMux files are served from the installed packages.
+    app.use("/uv/", express.static(uvPath, { fallthrough: true, index: false }));
+    app.use("/epoxy/", express.static(epoxyPath, { fallthrough: true, index: false }));
+    app.use("/baremux/", express.static(baremuxPath, { fallthrough: true, index: false }));
+    ultravioletReady = true;
+    console.log("Ultraviolet assets mounted.");
+  } catch (error) {
+    console.error("Ultraviolet could not initialize; the classic proxy remains available:",
+      error && error.message ? error.message : error);
+  }
+
+  server.on("request", (req, res) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    app(req, res);
+  });
+
+  server.on("upgrade", (req, socket, head) => {
+    let requestPath = "";
+    try { requestPath = new URL(req.url || "/", "http://localhost").pathname; } catch {}
+    if (!ultravioletReady || requestPath !== "/wisp/") {
+      socket.destroy();
+      return;
+    }
+    if (activeWispConnections >= MAX_WISP_CONNECTIONS) {
+      socket.end();
+      return;
+    }
+    activeWispConnections += 1;
+    socket.once("close", () => { activeWispConnections = Math.max(0, activeWispConnections - 1); });
+    try {
+      wispServer.routeRequest(req, socket, head);
+    } catch (error) {
+      console.warn("Wisp upgrade failed:", error && error.message ? error.message : error);
+      socket.destroy();
+    }
+  });
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log("Schoolmathtime listening on port " + PORT);
+    console.log("Approved host entries: " + ALLOWED_HOSTS.length);
+    console.log("Ultraviolet ready: " + ultravioletReady);
+  });
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error("Server startup failed:", error && error.stack ? error.stack : error);
+    process.exitCode = 1;
   });
 }
 
