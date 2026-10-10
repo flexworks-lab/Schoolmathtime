@@ -46,6 +46,12 @@ jobs:
           grep -q 'Restore the common GET form workflow' src/server.js
           grep -q 'MAX_PAGE_BYTES = 8 \* 1024 \* 1024' src/server.js
           grep -q 'iframe.videodelivery.net' src/server.js
+          grep -q 'Accept-Encoding": "gzip, br, deflate"' src/server.js
+          grep -q 'createBrotliDecompress' src/server.js
+          grep -q 'readRewrittenPageCache(rewrittenCacheKey)' src/server.js
+          grep -q 'isLargeStaticAsset' src/server.js
+          grep -q 'if (!transportReady)' public/ultraviolet.js
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'smart-speed-1'
           ! grep -q 'await navigator.serviceWorker.ready' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.bundle.js > /dev/null
