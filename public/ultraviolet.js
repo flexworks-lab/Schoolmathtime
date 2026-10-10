@@ -94,7 +94,14 @@
         timer = window.setTimeout(() => {
           cleanup();
           reject(new Error("Ultraviolet's service worker did not activate within 15 seconds. The worker may be blocked or its script/config may be stale."));
-    function candidateFailure(candidateFrame) {
+        }, 15000);
+        worker.addEventListener("statechange", onStateChange);
+        onStateChange();
+      });
+    }
+  }
+
+  function candidateFailure(candidateFrame) {
     try {
       const doc = candidateFrame.contentDocument;
       if (!doc || !doc.documentElement) return "The browser returned an empty document.";
