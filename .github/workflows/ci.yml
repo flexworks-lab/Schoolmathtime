@@ -40,6 +40,26 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'smart-race-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'youtube-login-1'
+          curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'stm-uv-youtube-layout'
+          grep -q 'id="uv-youtube-login"' public/ultraviolet.html
+          grep -q 'accounts.google.com/ServiceLogin' public/ultraviolet.js
+          grep -q 'Google blocked sign-in in this proxied browser' public/ultraviolet.js
+          node - <<'NODE'
+          const assert = require("node:assert/strict");
+          const fs = require("node:fs");
+          const vm = require("node:vm");
+          const context = {
+            self: {},
+            Ultraviolet: { codec: { xor: { encode: (value) => value, decode: (value) => value } } }
+          };
+          vm.runInNewContext(fs.readFileSync("public/uv/uv.config.js", "utf8"), context);
+          const config = context.self["__uv$config"];
+          assert.ok(Array.isArray(config.inject));
+          assert.ok(config.inject.some((item) => new RegExp(item.host).test("www.youtube.com")));
+          assert.ok(config.inject.some((item) => new RegExp(item.host).test("youtube-nocookie.com")));
+          assert.ok(!config.inject.some((item) => new RegExp(item.host).test("example.com")));
+          NODE
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="classic-frame"'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'did not activate within 15 seconds'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'Trying both browser routes'
