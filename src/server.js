@@ -997,6 +997,18 @@ app.get("/search", allowPublicBrowsing, (req, res) => {
   return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
 });
 
+app.get("/youtube-player", allowPublicBrowsing, (req, res) => {
+  // Compatibility for stale search-result URLs created before the native
+  // watch-page route was restored. Do not embed or redirect to YouTube itself.
+  const videoId = String(req.query.id || "");
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) {
+    return res.status(400).type("text/plain").send("A valid YouTube video ID is required.");
+  }
+  const target = "https://www.youtube.com/watch?v=" + encodeURIComponent(videoId);
+  res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
+});
+
 app.get("/watch", allowPublicBrowsing, (req, res) => {
   // YouTube's client-side navigation can resolve /watch against Schoolmathtime's
   // origin after its page has been proxied. Send that local route back through
