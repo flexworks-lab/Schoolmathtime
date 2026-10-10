@@ -120,6 +120,97 @@ document.querySelector("#browseForm").addEventListener("submit", (event) => {
   navigate(value);
 });
 
+const youtubeSearchForm = document.querySelector("#youtubeSearchForm");
+const youtubeSearchInput = document.querySelector("#youtubeSearchInput");
+const youtubeSearchStatus = document.querySelector("#youtubeSearchStatus");
+const youtubeSearchResults = document.querySelector("#youtubeSearchResults");
+
+function renderYouTubeResults(items) {
+  youtubeSearchResults.replaceChildren();
+  for (const item of items) {
+    const card = document.createElement("article");
+    card.className = "youtube-result-card";
+
+    if (item.thumbnail) {
+      const image = document.createElement("img");
+      image.className = "youtube-result-thumbnail";
+      image.src = item.thumbnail;
+      image.alt = "";
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.referrerPolicy = "no-referrer";
+      card.append(image);
+    }
+
+    const body = document.createElement("div");
+    body.className = "youtube-result-body";
+
+    const title = document.createElement("a");
+    title.className = "youtube-result-title";
+    title.href = item.watchUrl;
+    title.textContent = item.title || "Untitled video";
+    body.append(title);
+
+    const channel = document.createElement("p");
+    channel.className = "youtube-result-channel";
+    channel.textContent = item.channelTitle || "YouTube channel";
+    body.append(channel);
+
+    if (item.description) {
+      const description = document.createElement("p");
+      description.className = "youtube-result-description";
+      description.textContent = item.description;
+      body.append(description);
+    }
+
+    const open = document.createElement("a");
+    open.className = "youtube-result-open";
+    open.href = item.watchUrl;
+    open.textContent = "Open in Schoolmathtime";
+    body.append(open);
+
+    card.append(body);
+    youtubeSearchResults.append(card);
+  }
+}
+
+youtubeSearchForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const query = String(youtubeSearchInput?.value || "").trim();
+  if (query.length < 2) {
+    youtubeSearchStatus.textContent = "Enter at least two characters to search.";
+    return;
+  }
+
+  const submit = youtubeSearchForm.querySelector('button[type="submit"]');
+  const oldLabel = submit.textContent;
+  submit.disabled = true;
+  submit.textContent = "Searching…";
+  youtubeSearchStatus.textContent = "Searching YouTube…";
+  youtubeSearchResults.replaceChildren();
+
+  try {
+    const response = await fetch("/api/youtube/search?q=" + encodeURIComponent(query), {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "YouTube search failed. Try again.");
+    const items = Array.isArray(data.items) ? data.items : [];
+    renderYouTubeResults(items);
+    youtubeSearchStatus.textContent = items.length
+      ? "Found " + items.length + " videos. Opening a result stays inside Schoolmathtime."
+      : "No videos found. Try a different search.";
+  } catch (error) {
+    youtubeSearchStatus.textContent = error.message || "YouTube search is temporarily unavailable.";
+  } finally {
+    submit.disabled = false;
+    submit.textContent = oldLabel;
+  }
+});
+
 document.querySelector("#clearSearchButton").addEventListener("click", () => {
   targetInput.value = "";
   targetInput.focus();
