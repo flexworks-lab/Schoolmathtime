@@ -48,6 +48,9 @@ jobs:
           grep -q 'Chrome/148.0.0.0' src/server.js
           grep -q 'const TIKTOK_HOST_ROOTS' src/server.js
           grep -q 'var nativeFetch=window.fetch' src/server.js
+          grep -q 'node|node-api|passport' src/server.js
+          grep -q 'TikTok API upstream response:' src/server.js
+          grep -q 'host=' src/server.js
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' 'http://127.0.0.1:3917/tiktok-api?url=https%3A%2F%2Fexample.com%2Fapi%2Ftest')" = "403"
           ALLOWED_HOSTS='tiktok.com' node - <<'NODE'
           const assert = require("node:assert/strict");
