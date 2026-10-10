@@ -1109,8 +1109,8 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     const tiktokApiBridge = '(function(){var base=' + sourceLiteral + ';var roots=' +
       JSON.stringify(TIKTOK_HOST_ROOTS) + ';function knownHost(host){host=String(host||"").toLowerCase();return roots.some(function(root){return host===root||host.endsWith("."+root)})}' +
       'function mapped(raw){try{var value=raw&&typeof raw==="object"&&raw.url?raw.url:raw;var url=new URL(String(value),base);' +
-      'if(url.origin===location.origin&&/^\\/(?:api|node-api|passport|aweme|webcast|search|share|api2)(?:\\/|$)/i.test(url.pathname))url=new URL(url.pathname+url.search,base);' +
-      'if(url.protocol!=="https:"||!knownHost(url.hostname)||!/^\\/(?:api|node-api|passport|aweme|webcast|search|share|api2)(?:\\/|$)/i.test(url.pathname))return null;' +
+      'if(url.origin===location.origin&&/^\\/(?:api|node|node-api|passport|aweme|webcast|search|share|api2|service|shop|recommend|comment|creator|user)(?:\\/|$)/i.test(url.pathname))url=new URL(url.pathname+url.search,base);' +
+      'if(url.protocol!=="https:"||!knownHost(url.hostname)||!/^\\/(?:api|node|node-api|passport|aweme|webcast|search|share|api2|service|shop|recommend|comment|creator|user)(?:\\/|$)/i.test(url.pathname))return null;' +
       'return "/tiktok-api?url="+encodeURIComponent(url.href)}catch(_){return null}}' +
       'var nativeFetch=window.fetch;if(nativeFetch)window.fetch=function(input,init){var raw=input&&typeof input==="object"&&input.url?input.url:input;var route=mapped(raw);' +
       'if(!route)return nativeFetch.apply(this,arguments);try{if(input instanceof Request)return nativeFetch.call(this,new Request(route,input.clone()),init)}catch(_){}return nativeFetch.call(this,route,init)};' +
@@ -1408,9 +1408,11 @@ app.all("/tiktok-api", allowPublicBrowsing, fetchLimiter, async (req, res) => {
   }
 
   let session;
+  let diagnosticTarget = null;
   try {
     const rawTarget = String(req.query.url || "");
     let target = new URL(rawTarget);
+    diagnosticTarget = target;
     if (target.protocol !== "https:" || !isTikTokUpstreamHost(target.hostname)) {
       return res.status(403).type("text/plain").send("TikTok API destination blocked.");
     }
@@ -1467,7 +1469,14 @@ app.all("/tiktok-api", allowPublicBrowsing, fetchLimiter, async (req, res) => {
         requestBody = null;
       }
       target = nextTarget;
+      diagnosticTarget = target;
     }
+
+    console.info("TikTok API upstream response:",
+      "host=" + target.hostname,
+      "path=" + target.pathname,
+      "status=" + (upstream?.status || 502),
+      "type=" + String(upstream?.headers?.["content-type"] || "unknown").split(";")[0]);
 
     res.set({
       "Cache-Control": "no-store",
@@ -1485,7 +1494,11 @@ app.all("/tiktok-api", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     return res.send(upstream?.body || Buffer.alloc(0));
   } catch (error) {
     const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 502;
-    console.warn("TikTok API proxy failed:", status, error.message || "unknown error");
+    console.warn("TikTok API proxy failed:",
+      status,
+      "host=" + (diagnosticTarget?.hostname || "unknown"),
+      "path=" + (diagnosticTarget?.pathname || "unknown"),
+      error.message || "unknown error");
     return res.status(status).type("text/plain").send("TikTok API request failed: " + String(error.message || "unknown error").slice(0, 300));
   }
 });
