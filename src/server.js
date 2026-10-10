@@ -1185,12 +1185,9 @@ async function startServer() {
     wispServer.options.stream_limit_total = 32;
     if (!ALLOWED_HOSTS.includes("*")) {
       wispServer.options.hostname_whitelist = ALLOWED_HOSTS.map((host) => {
-        const escaped = host.replace(/[.+?^$()|[\]\\]/g, "\\if (require.main === module) {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log("Schoolmathtime listening on port " + PORT);
-    console.log("Approved host entries: " + ALLOWED_HOSTS.length);
-  });
-}");
+        const escaped = host.split(".").map((part) =>
+          part.replace(/[.*+?^$()|[\]\\]/g, (character) => "\\" + character)
+        ).join("\\.");
         return new RegExp("^(?:[^.]+\\.)*" + escaped + "$", "i");
       });
     }
