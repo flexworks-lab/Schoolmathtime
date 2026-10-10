@@ -12,6 +12,7 @@
   <link rel="prefetch" href="/uv/uv.config.js" as="script">
   <link rel="prefetch" href="/epoxy/index.mjs" as="script">
   <script src="/app.js?v=ultraviolet-engine-1" defer></script>
+  <script src="/youtube-account.js?v=google-youtube-oauth-1" defer></script>
 </head>
 <body>
   <main class="browser-window">
@@ -51,6 +52,17 @@
           <p class="home-hint">Search Google or enter a website address. Pages and media open here.</p>
 
           <section class="youtube-search-panel" aria-labelledby="youtubeSearchTitle">
+            <div class="youtube-account" aria-label="Official YouTube account connection">
+              <div class="youtube-account-copy">
+                <h3 id="youtubeAccountTitle">Connect your YouTube account</h3>
+                <p id="youtubeAccountStatus" role="status" aria-live="polite">Use Google's official sign-in to authorize read-only YouTube channel access. This does not sign you into the proxied YouTube website.</p>
+                <p id="youtubeAccountChannel" class="youtube-account-channel" hidden></p>
+              </div>
+              <div class="youtube-account-actions">
+                <button id="youtubeAccountConnect" class="youtube-account-connect" type="button" disabled>Connect with Google</button>
+                <button id="youtubeAccountDisconnect" class="youtube-account-disconnect" type="button" hidden>Disconnect</button>
+              </div>
+            </div>
             <div class="youtube-search-heading">
               <div>
                 <h2 id="youtubeSearchTitle">YouTube video search</h2>

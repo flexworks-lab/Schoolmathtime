@@ -42,6 +42,17 @@ const YOUTUBE_MAX_QUEUED_REQUESTS = 48;
 const YOUTUBE_SEARCH_CACHE_TTL_MS = 10 * 60_000;
 const YOUTUBE_SEARCH_CACHE_MAX_ENTRIES = 100;
 const YOUTUBE_API_ENDPOINT = "https://www.googleapis.com/youtube/v3/search";
+const GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+const GOOGLE_OAUTH_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo";
+const YOUTUBE_CHANNELS_ENDPOINT = "https://youtube.googleapis.com/youtube/v3/channels";
+const GOOGLE_YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
+const GOOGLE_OAUTH_SCOPES = "openid email profile " + GOOGLE_YOUTUBE_READONLY_SCOPE;
+const YOUTUBE_OAUTH_STATE_TTL_MS = 10 * 60_000;
+const YOUTUBE_OAUTH_SESSION_MAX_MS = 60 * 60_000;
+const YOUTUBE_OAUTH_SESSION_COOKIE = "stm_yt_sid";
+const youtubeOAuthStates = new Map();
+const youtubeOAuthSessions = new Map();
 const YOUTUBE_SEARCH_WINDOW_MS = 24 * 60 * 60_000;
 const requestedYouTubeDailyCap = Number(process.env.YOUTUBE_SEARCH_DAILY_CAP || 80);
 const YOUTUBE_SEARCH_DAILY_CAP = Number.isSafeInteger(requestedYouTubeDailyCap)
@@ -158,10 +169,106 @@ const youtubeSearchLimiter = rateLimit({
   message: { error: "Too many YouTube searches. Please wait a minute and try again." }
 });
 
+const youtubeOAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: "Too many Google sign-in attempts. Please wait a little while and try again."
+});
+
 function allowPublicBrowsing(_req, _res, next) {
   // Access keys are disabled by request. Public routes still retain the rate
   // limit, HTTPS-only policy, public-IP DNS validation, and redirect checks.
   return next();
+}
+
+
+function getYouTubeOAuthSettings() {
+  const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
+  const clientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();
+  const rawRedirectUri = String(process.env.GOOGLE_OAUTH_REDIRECT_URI || "").trim();
+  if (!clientId || !clientSecret || !rawRedirectUri) {
+    return {
+      configured: false,
+      message: "Google sign-in setup is incomplete. Configure GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI on the Schoolmathtime server."
+    };
+  }
+
+  let redirect;
+  try {
+    redirect = new URL(rawRedirectUri);
+  } catch {
+    return {
+      configured: false,
+      message: "GOOGLE_OAUTH_REDIRECT_URI must be the full HTTPS callback URL ending in /auth/google/callback."
+    };
+  }
+  const localHost = redirect.hostname === "localhost" ||
+    redirect.hostname === "127.0.0.1" ||
+    redirect.hostname === "[::1]";
+  if ((redirect.protocol !== "https:" && !(redirect.protocol === "http:" && localHost)) ||
+      redirect.username || redirect.password || redirect.search || redirect.hash ||
+      redirect.pathname !== "/auth/google/callback") {
+    return {
+      configured: false,
+      message: "GOOGLE_OAUTH_REDIRECT_URI must use HTTPS and end in /auth/google/callback. HTTP is allowed only for local development."
+    };
+  }
+  return {
+    configured: true,
+    clientId,
+    clientSecret,
+    redirectUri: redirect.toString()
+  };
+}
+
+function getYouTubeSessionId(req) {
+  const cookie = String(req.headers.cookie || "");
+  const match = cookie.match(/(?:^|;\s*)stm_yt_sid=([a-f0-9]{64})(?:;|$)/);
+  return match ? match[1] : "";
+}
+
+function isSecureYouTubeCookie(req) {
+  return process.env.NODE_ENV === "production" ||
+    String(process.env.PUBLIC_ORIGIN || "").startsWith("https://") ||
+    Boolean(req.secure);
+}
+
+function setYouTubeSessionCookie(req, res, sessionId, maxAgeSeconds) {
+  const secure = isSecureYouTubeCookie(req) ? "; Secure" : "";
+  res.append("Set-Cookie", YOUTUBE_OAUTH_SESSION_COOKIE + "=" + sessionId +
+    "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" +
+    String(Math.max(0, Math.floor(maxAgeSeconds))) + secure);
+}
+
+function clearYouTubeSessionCookie(req, res) {
+  const secure = isSecureYouTubeCookie(req) ? "; Secure" : "";
+  res.append("Set-Cookie", YOUTUBE_OAUTH_SESSION_COOKIE +
+    "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" + secure);
+}
+
+function pruneYouTubeOAuthState() {
+  const now = Date.now();
+  for (const [state, pending] of youtubeOAuthStates) {
+    if (!pending || pending.expiresAt <= now) youtubeOAuthStates.delete(state);
+  }
+  while (youtubeOAuthStates.size > 1000) {
+    youtubeOAuthStates.delete(youtubeOAuthStates.keys().next().value);
+  }
+  for (const [id, session] of youtubeOAuthSessions) {
+    if (!session || session.expiresAt <= now) youtubeOAuthSessions.delete(id);
+  }
+  while (youtubeOAuthSessions.size > 2000) {
+    youtubeOAuthSessions.delete(youtubeOAuthSessions.keys().next().value);
+  }
+}
+
+function oauthReturn(res, result) {
+  const url = new URL("/", "https://schoolmathtime.invalid");
+  if (result) url.searchParams.set("youtube_auth", result);
+  res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  return res.redirect(303, url.pathname + url.search);
 }
 
 function isTikTokUpstreamHost(hostname) {
@@ -1174,6 +1281,187 @@ app.use(express.static(path.join(__dirname, "..", "public"), {
 }));
 
 app.get("/health", (_req, res) => res.json({ ok: true, ultraviolet: ultravioletReady }));
+
+// Official Google OAuth: use a top-level Google authorization redirect and
+// exchange the short-lived authorization code on the server. The proxy never
+// receives, stores, or forwards a user's Google password or YouTube cookies.
+app.get("/api/youtube/account", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  pruneYouTubeOAuthState();
+  const settings = getYouTubeOAuthSettings();
+  if (!settings.configured) {
+    return res.json({ configured: false, connected: false, setupMessage: settings.message });
+  }
+
+  const sessionId = getYouTubeSessionId(req);
+  const session = sessionId ? youtubeOAuthSessions.get(sessionId) : null;
+  if (!session || session.expiresAt <= Date.now()) {
+    if (sessionId) youtubeOAuthSessions.delete(sessionId);
+    if (sessionId) clearYouTubeSessionCookie(req, res);
+    return res.json({ configured: true, connected: false });
+  }
+  return res.json({ configured: true, connected: true, account: session.account });
+});
+
+app.get("/auth/google/start", youtubeOAuthLimiter, (req, res) => {
+  const settings = getYouTubeOAuthSettings();
+  if (!settings.configured) {
+    return res.status(503).set({
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer"
+    }).type("text/plain").send(settings.message);
+  }
+
+  pruneYouTubeOAuthState();
+  const state = crypto.randomBytes(32).toString("hex");
+  const codeVerifier = crypto.randomBytes(32).toString("base64url");
+  const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
+  youtubeOAuthStates.set(state, {
+    codeVerifier,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + YOUTUBE_OAUTH_STATE_TTL_MS
+  });
+  while (youtubeOAuthStates.size > 1000) {
+    youtubeOAuthStates.delete(youtubeOAuthStates.keys().next().value);
+  }
+
+  const params = new URLSearchParams({
+    client_id: settings.clientId,
+    redirect_uri: settings.redirectUri,
+    response_type: "code",
+    scope: GOOGLE_OAUTH_SCOPES,
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    access_type: "online",
+    prompt: "select_account"
+  });
+  res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  return res.redirect(302, GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT + "?" + params.toString());
+});
+
+app.get("/auth/google/callback", youtubeOAuthLimiter, async (req, res) => {
+  res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  const googleError = String(req.query.error || "");
+  if (googleError) return oauthReturn(res, googleError === "access_denied" ? "denied" : "error");
+
+  const state = String(req.query.state || "");
+  const pending = state ? youtubeOAuthStates.get(state) : null;
+  if (state) youtubeOAuthStates.delete(state);
+  if (!pending || pending.expiresAt <= Date.now()) return oauthReturn(res, "state_error");
+
+  const code = String(req.query.code || "");
+  if (!code || code.length > 4096) return oauthReturn(res, "token_error");
+  const settings = getYouTubeOAuthSettings();
+  if (!settings.configured) return oauthReturn(res, "not_configured");
+
+  try {
+    const tokenResponse = await fetch(GOOGLE_OAUTH_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        client_id: settings.clientId,
+        client_secret: settings.clientSecret,
+        code,
+        code_verifier: pending.codeVerifier,
+        grant_type: "authorization_code",
+        redirect_uri: settings.redirectUri
+      }),
+      signal: AbortSignal.timeout(12_000)
+    });
+    const tokenPayload = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !tokenPayload.access_token) {
+      console.warn("Google OAuth code exchange failed:", tokenResponse.status);
+      return oauthReturn(res, "token_error");
+    }
+    const grantedScopes = String(tokenPayload.scope || "").split(/\s+/);
+    if (!grantedScopes.includes(GOOGLE_YOUTUBE_READONLY_SCOPE)) {
+      return oauthReturn(res, "scope_denied");
+    }
+
+    const accessToken = String(tokenPayload.access_token);
+    const [profileResponse, channelResponse] = await Promise.all([
+      fetch(GOOGLE_OAUTH_USERINFO_ENDPOINT, {
+        headers: { Accept: "application/json", Authorization: "Bearer " + accessToken },
+        signal: AbortSignal.timeout(12_000)
+      }),
+      fetch(YOUTUBE_CHANNELS_ENDPOINT + "?part=snippet&mine=true", {
+        headers: { Accept: "application/json", Authorization: "Bearer " + accessToken },
+        signal: AbortSignal.timeout(12_000)
+      })
+    ]);
+    const profile = await profileResponse.json().catch(() => ({}));
+    const channelPayload = await channelResponse.json().catch(() => ({}));
+    if (!profileResponse.ok) {
+      console.warn("Google OAuth user profile lookup failed:", profileResponse.status);
+      return oauthReturn(res, "profile_error");
+    }
+    if (!channelResponse.ok) {
+      const reason = String(channelPayload?.error?.errors?.[0]?.reason || "");
+      console.warn("YouTube account API request failed:", channelResponse.status, reason || "unknown reason");
+      return oauthReturn(res, "youtube_api_error");
+    }
+
+    const channel = Array.isArray(channelPayload.items) ? channelPayload.items[0] : null;
+    const channelId = String(channel?.id || "");
+    const channelTitle = String(channel?.snippet?.title || "").slice(0, 160);
+    const account = {
+      name: String(profile.name || profile.given_name || "Google account").slice(0, 160),
+      email: String(profile.email || "").slice(0, 254),
+      channelTitle,
+      channelUrl: /^[A-Za-z0-9_-]{5,40}$/.test(channelId)
+        ? "/ultraviolet.html?url=" + encodeURIComponent("https://www.youtube.com/channel/" + channelId)
+        : ""
+    };
+
+    pruneYouTubeOAuthState();
+    const sessionId = crypto.randomBytes(32).toString("hex");
+    const expiresIn = Number(tokenPayload.expires_in);
+    const sessionTtlMs = Number.isFinite(expiresIn) && expiresIn > 0
+      ? Math.min(expiresIn * 1000, YOUTUBE_OAUTH_SESSION_MAX_MS)
+      : YOUTUBE_OAUTH_SESSION_MAX_MS;
+    youtubeOAuthSessions.set(sessionId, {
+      accessToken,
+      expiresAt: Date.now() + sessionTtlMs,
+      account
+    });
+    while (youtubeOAuthSessions.size > 2000) {
+      youtubeOAuthSessions.delete(youtubeOAuthSessions.keys().next().value);
+    }
+    setYouTubeSessionCookie(req, res, sessionId, sessionTtlMs / 1000);
+    return oauthReturn(res, "connected");
+  } catch (error) {
+    console.warn("Google OAuth callback failed:", error?.name || "unknown error");
+    return oauthReturn(res, "error");
+  }
+});
+
+app.post("/api/youtube/logout", youtubeOAuthLimiter, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const sessionId = getYouTubeSessionId(req);
+  const session = sessionId ? youtubeOAuthSessions.get(sessionId) : null;
+  if (sessionId) youtubeOAuthSessions.delete(sessionId);
+  clearYouTubeSessionCookie(req, res);
+
+  let revoked = false;
+  if (session?.accessToken) {
+    try {
+      const response = await fetch("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: session.accessToken }),
+        signal: AbortSignal.timeout(5000)
+      });
+      revoked = response.ok;
+    } catch {
+      revoked = false;
+    }
+  }
+  return res.json({ ok: true, revoked });
+});
 
 app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async (req, res) => {
   res.set("Cache-Control", "no-store");

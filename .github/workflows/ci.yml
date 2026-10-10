@@ -38,6 +38,13 @@ jobs:
           cat /tmp/schoolmathtime-startup.log
           test "$ready" -eq 1
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
+          curl --fail --silent http://127.0.0.1:3917/api/youtube/account | grep -q '"configured":false'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3917/auth/google/start)" = "503"
+          curl --fail --silent http://127.0.0.1:3917/index.html | grep -q 'id="youtubeAccountConnect"'
+          curl --fail --silent http://127.0.0.1:3917/youtube-account.js | grep -q 'Google sign-in needs setup'
+          grep -q 'GOOGLE_OAUTH_CLIENT_SECRET' README.md
+          grep -q 'code_challenge_method: "S256"' src/server.js
+          grep -q 'GOOGLE_YOUTUBE_READONLY_SCOPE' src/server.js
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'youtube-login-1'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'youtube-login-1'

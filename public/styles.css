@@ -295,3 +295,71 @@ button { cursor: pointer; }
   .youtube-result-description { font-size: 9px; }
   .youtube-result-open { white-space: normal; }
 }
+
+
+/* Official, read-only YouTube account connection */
+.youtube-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 13px;
+  border: 1px solid #384151;
+  border-radius: 10px;
+  background: linear-gradient(130deg, rgba(47,55,70,.65), rgba(28,29,33,.85));
+}
+.youtube-account-copy { min-width: 0; }
+.youtube-account-copy h3 {
+  margin: 0;
+  color: #e8edf7;
+  font-size: 12px;
+  font-weight: 700;
+}
+.youtube-account-copy p {
+  margin: 5px 0 0;
+  color: #9da6b5;
+  font-size: 10px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.youtube-account-channel a {
+  margin-left: 6px;
+  color: #c4d8ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.youtube-account-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.youtube-account-connect, .youtube-account-disconnect {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #5c6e8f;
+  border-radius: 8px;
+  color: #1d2634;
+  background: #c5d7f9;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.youtube-account-connect:hover { background: #dbe6fc; }
+.youtube-account-disconnect {
+  border-color: #484b53;
+  color: #d3d7df;
+  background: #2b2d33;
+}
+.youtube-account-disconnect:hover { background: #3a3c44; }
+.youtube-account-connect:disabled, .youtube-account-disconnect:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+@media (max-width: 620px) {
+  .youtube-account { align-items: stretch; flex-direction: column; }
+  .youtube-account-actions { justify-content: stretch; }
+  .youtube-account-actions button { flex: 1; }
+}

@@ -29,6 +29,23 @@ To enable search:
 
 The default code limit is 80 uncached searches per rolling 24-hour window to preserve quota. It can be lowered or raised up to 90 with `YOUTUBE_SEARCH_DAILY_CAP`. Repeated searches are cached for 10 minutes. The YouTube Data API default quota for `search.list` is 100 calls per day; Google may change project limits. See the [official search.list documentation](https://developers.google.com/youtube/v3/docs/search/list) and [API key security guidance](https://docs.cloud.google.com/docs/authentication/api-keys).
 
+## Official YouTube account connection
+
+The home page can connect a Google account using Google's server-side OAuth authorization-code flow with PKCE. It requests the read-only YouTube scope and displays the connected Google account and YouTube channel details. Google sign-in happens on Google's own page and returns to Schoolmathtime; this is not an attempt to copy Google cookies into the proxy. **This connection does not log the user into the YouTube website inside Ultraviolet.** It only authorizes official YouTube Data API features.
+
+To enable it:
+
+1. In Google Cloud Console, select the project and enable **YouTube Data API v3**.
+2. Configure the OAuth consent screen and add your own Google account as a test user while the app is in Testing.
+3. Create an OAuth client of type **Web application**. Add the Schoolmathtime site origin (scheme + hostname only) as an authorized JavaScript origin, and register the exact callback URL as an authorized redirect URI.
+4. In Render, add these server-side environment variables:
+   - **GOOGLE_OAUTH_CLIENT_ID** — the Web application client ID.
+   - **GOOGLE_OAUTH_CLIENT_SECRET** — the client secret; never put this in browser JavaScript or commit it.
+   - **GOOGLE_OAUTH_REDIRECT_URI** — the exact callback registered in Cloud Console, ending in /auth/google/callback (for example, https://YOUR-SCHOOLMATHTIME-HOST/auth/google/callback).
+5. Redeploy Schoolmathtime and use **Connect with Google** in the YouTube video search panel.
+
+The access token is exchanged and held only in server memory; it is not sent to the browser and is not persisted to disk. The connection expires with the token or a server restart, so the user may need to reconnect. Disconnect attempts to revoke the token with Google's revocation endpoint. Public apps requesting user-data scopes may need Google OAuth verification before use beyond the configured test users; follow the requirements shown in Cloud Console.
+
 ## Ultraviolet browser engine
 
 The homepage address bar and YouTube search results use the Ultraviolet service-worker engine. The original server-side proxy at `/browse` remains available using the **Use classic browser** fallback. Ultraviolet assets are served from the installed npm package; the server uses `@mercuryworkshop/wisp-js` for its Wisp transport.
@@ -47,7 +64,7 @@ Some site JavaScript, forms, service workers, protected playback, and origin-loc
 
 ## Run locally
 
-Requires Node.js 20.9 or later.
+Requires Node.js 24 or later, as specified in package.json.
 
 ```bash
 npm ci
