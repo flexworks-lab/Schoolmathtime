@@ -84,6 +84,35 @@ app.use(helmet({ contentSecurityPolicy: {
     frameAncestors: ["'none'"]
   }
 }}));
+
+// Ultraviolet's BareMux transport constructs an AsyncFunction inside its worker.
+// Keep the site's default CSP strict, but allow the required dynamic evaluation
+// only on the Ultraviolet shell and the proxy-engine assets that run its code.
+app.use((req, res, next) => {
+  const pathname = req.path || "/";
+  const isUltravioletSurface = pathname === "/ultraviolet.html" ||
+    pathname.startsWith("/uv/") ||
+    pathname.startsWith("/baremux/") ||
+    pathname.startsWith("/epoxy/");
+  if (isUltravioletSurface) {
+    res.setHeader("Content-Security-Policy", [
+      "default-src 'self' data: blob: https:",
+      "script-src 'self' 'unsafe-eval' https:",
+      "style-src 'self' 'unsafe-inline' https:",
+      "img-src 'self' data: blob: https:",
+      "connect-src 'self' https: ws: wss:",
+      "worker-src 'self' blob:",
+      "child-src 'self' blob: https:",
+      "frame-src 'self' blob: https:",
+      "font-src 'self' data: https:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'"
+    ].join("; "));
+  }
+  next();
+});
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false, limit: "16kb" }));
 const fetchLimiter = rateLimit({
