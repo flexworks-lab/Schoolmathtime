@@ -49,3 +49,6 @@ jobs:
           ! curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'sw: "/uv/sw.js"'
           curl --fail --silent http://127.0.0.1:3917/baremux/index.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/epoxy/index.mjs > /dev/null
+          curl --fail --silent --head http://127.0.0.1:3917/ultraviolet.html | grep -qi "content-security-policy:.*unsafe-eval"
+          curl --fail --silent --head http://127.0.0.1:3917/baremux/worker.js | grep -qi "content-security-policy:.*unsafe-eval"
+          ! curl --fail --silent --head http://127.0.0.1:3917/ | grep -qi "content-security-policy:.*unsafe-eval"
