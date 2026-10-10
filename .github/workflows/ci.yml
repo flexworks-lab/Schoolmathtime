@@ -52,6 +52,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
           grep -q 'wispServer.options.wisp_version = 2' src/server.js
           grep -q 'wispServer.options.stream_limit_total = 128' src/server.js
+          grep -q 'wispServer.options.stream_limit_per_host = -1' src/server.js
           curl --fail --silent --head http://127.0.0.1:3917/ultraviolet.html | grep -qi "content-security-policy:.*unsafe-eval"
           curl --fail --silent --head http://127.0.0.1:3917/baremux/worker.js | grep -qi "content-security-policy:.*unsafe-eval"
           ! curl --fail --silent --head http://127.0.0.1:3917/ | grep -qi "content-security-policy:.*unsafe-eval"
