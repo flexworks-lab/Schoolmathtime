@@ -39,7 +39,7 @@ jobs:
           test "$ready" -eq 1
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'baremux-csp-fix-1'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'wisp-v2-stream-fix-2'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'did not activate within 15 seconds'
           ! grep -q 'await navigator.serviceWorker.ready' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
@@ -49,6 +49,9 @@ jobs:
           ! curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'sw: "/uv/sw.js"'
           curl --fail --silent http://127.0.0.1:3917/baremux/index.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/epoxy/index.mjs > /dev/null
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
+          grep -q 'wispServer.options.wisp_version = 2' src/server.js
+          grep -q 'wispServer.options.stream_limit_total = 128' src/server.js
           curl --fail --silent --head http://127.0.0.1:3917/ultraviolet.html | grep -qi "content-security-policy:.*unsafe-eval"
           curl --fail --silent --head http://127.0.0.1:3917/baremux/worker.js | grep -qi "content-security-policy:.*unsafe-eval"
           ! curl --fail --silent --head http://127.0.0.1:3917/ | grep -qi "content-security-policy:.*unsafe-eval"
