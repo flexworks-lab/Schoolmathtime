@@ -961,7 +961,7 @@ app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async 
         thumbnail: thumbnail ? "/resource?url=" + encodeURIComponent(thumbnail) : "",
         // Keep the navigation on Schoolmathtime; don't send a new tab directly
         // to YouTube and don't put an API key in any browser-visible URL.
-        watchUrl: "/browse?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id)
+        watchUrl: "/youtube-player?id=" + encodeURIComponent(id)
       }];
     });
 
@@ -995,6 +995,36 @@ app.get("/search", allowPublicBrowsing, (req, res) => {
   const target = "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   return res.redirect(302, "/browse?url=" + encodeURIComponent(target));
+});
+
+app.get("/youtube-player", allowPublicBrowsing, (req, res) => {
+  const videoId = String(req.query.id || "");
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) {
+    return res.status(400).type("text/plain").send("A valid YouTube video ID is required.");
+  }
+
+  // Use YouTube's official player rather than scraping the watch-page HTML.
+  // Keep the player inside Schoolmathtime, and send the identifying Referer
+  // header YouTube requires for embedded playback.
+  const playerUrl = "https://www.youtube.com/embed/" + videoId + "?rel=0";
+  const html = '<!doctype html><html lang="en"><head>' +
+    '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="referrer" content="strict-origin-when-cross-origin">' +
+    '<title>YouTube Player — Schoolmathtime</title>' +
+    '<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#111318;color:#f2f3f6;font:15px system-ui,sans-serif;display:flex;flex-direction:column}.top{height:54px;display:flex;align-items:center;gap:14px;padding:0 18px;background:#1b1e26;border-bottom:1px solid #333743}.brand{font-weight:750;letter-spacing:.02em}.home{margin-left:auto;color:#f2f3f6;text-decoration:none;background:#303440;border-radius:8px;padding:8px 12px}.main{width:min(1100px,100%);margin:0 auto;padding:24px 18px}.notice{color:#b2b8c5;margin:0 0 14px}.player{width:100%;aspect-ratio:16/9;min-height:270px;background:#000;border:0;border-radius:12px;overflow:hidden}.player iframe{width:100%;height:100%;border:0;display:block}@media(max-width:520px){.main{padding:12px}.player{min-height:220px}.top{padding:0 12px}}</style>' +
+    '</head><body><header class="top"><span class="brand">Schoolmathtime</span><span>Video player</span><a class="home" href="/">Home</a></header>' +
+    '<main class="main"><p class="notice">Playing through YouTube\x27s official player. Playback availability depends on YouTube and your network.</p>' +
+    '<div class="player"><iframe src="' + playerUrl + '" title="YouTube video player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>' +
+    '</main></body></html>';
+
+  res.set({
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+  });
+  return res.status(200).send(html);
 });
 
 app.get("/watch", allowPublicBrowsing, (req, res) => {
