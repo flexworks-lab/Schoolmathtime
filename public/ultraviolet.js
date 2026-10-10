@@ -7,6 +7,7 @@
   const status = byId("uv-status");
   const frame = byId("uv-frame");
   const classicFrame = byId("classic-frame");
+  const engineSwitch = byId("uv-engine-switch");
   const welcome = byId("uv-welcome");
   const error = byId("uv-error");
   const copyError = byId("uv-copy-error");
@@ -126,6 +127,7 @@
     raceAttempt = null;
     if (attempt.timer) window.clearTimeout(attempt.timer);
     activeEngine = "";
+    engineSwitch.hidden = true;
     document.body.classList.remove("classic-active");
     frame.classList.add("race-hidden");
     classicFrame.classList.add("race-hidden");
@@ -161,6 +163,7 @@
     if (attempt.timer) window.clearTimeout(attempt.timer);
     raceAttempt = null;
     activeEngine = engine;
+    engineSwitch.hidden = engine !== "classic";
     hasLoaded = true;
     document.body.classList.toggle("classic-active", engine === "classic");
     winner.style.display = "block";
@@ -201,6 +204,7 @@
     if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
     raceAttempt = attempt;
     activeEngine = "";
+    engineSwitch.hidden = true;
     hasLoaded = false;
     lastTarget = target;
     address.value = target;
@@ -271,6 +275,60 @@
       }
     } catch {}
     return lastTarget;
+  }
+
+  function openSingleEngine(engine, value) {
+    let target;
+    try { target = makeTarget(value || currentTarget() || lastTarget || address.value); }
+    catch (err) { setError(err.message || err); return; }
+    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
+    if (raceAttempt) raceAttempt.finished = true;
+    raceAttempt = null;
+    const switchId = ++raceSerial;
+    const winner = engine === "uv" ? frame : classicFrame;
+    const loser = engine === "uv" ? classicFrame : frame;
+    activeEngine = engine;
+    lastTarget = target;
+    address.value = target;
+    hasLoaded = false;
+    error.hidden = true;
+    copyError.hidden = true;
+    welcome.style.display = "none";
+    engineSwitch.hidden = engine !== "classic";
+    document.body.classList.toggle("classic-active", engine === "classic");
+    winner.style.display = "block";
+    winner.classList.add("race-hidden");
+    loser.style.display = "block";
+    loser.classList.add("race-hidden");
+    loser.dataset.expectedSrc = "";
+    loser.src = "about:blank";
+    setStatus("Opening " + new URL(target).hostname + " with " +
+      (engine === "uv" ? "Ultraviolet" : "the classic proxy") + "…");
+
+    if (engine === "classic") {
+      const classicPath = "/browse?url=" + encodeURIComponent(target);
+      winner.dataset.expectedSrc = new URL(classicPath, location.href).href;
+      winner.src = classicPath;
+      winner.classList.remove("race-hidden");
+      hasLoaded = true;
+      return;
+    }
+
+    void (async () => {
+      try {
+        await ensureTransport();
+        if (switchId !== raceSerial || activeEngine !== "uv" || lastTarget !== target) return;
+        const uvPath = __uv$config.prefix + __uv$config.encodeUrl(target);
+        winner.dataset.expectedSrc = new URL(uvPath, location.href).href;
+        winner.src = uvPath;
+        winner.classList.remove("race-hidden");
+      } catch (err) {
+        if (switchId !== raceSerial) return;
+        engineSwitch.hidden = true;
+        welcome.style.display = "flex";
+        setError(err && err.stack ? err.stack : err);
+      }
+    })();
   }
 
   function readBookmarks() {
@@ -359,6 +417,10 @@
   });
   classicFrame.addEventListener("load", () => {
     handleCandidateLoad("classic");
+  });
+  engineSwitch.addEventListener("click", () => {
+    const target = currentTarget() || lastTarget || address.value.trim();
+    if (target) openSingleEngine("uv", target);
   });
   window.addEventListener("popstate", (event) => {
     const target = event.state?.target;
