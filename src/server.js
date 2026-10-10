@@ -38,11 +38,18 @@ const YOUTUBE_MAX_QUEUED_REQUESTS = 48;
 const YOUTUBE_SEARCH_CACHE_TTL_MS = 10 * 60_000;
 const YOUTUBE_SEARCH_CACHE_MAX_ENTRIES = 100;
 const YOUTUBE_API_ENDPOINT = "https://www.googleapis.com/youtube/v3/search";
+const YOUTUBE_SEARCH_WINDOW_MS = 24 * 60 * 60_000;
+const requestedYouTubeDailyCap = Number(process.env.YOUTUBE_SEARCH_DAILY_CAP || 80);
+const YOUTUBE_SEARCH_DAILY_CAP = Number.isSafeInteger(requestedYouTubeDailyCap)
+  ? Math.max(1, Math.min(90, requestedYouTubeDailyCap))
+  : 80;
 const dnsCache = new Map();
 const responseCache = new Map();
 const upstreamCooldowns = new Map();
 const upstreamQueues = new Map();
 const youtubeSearchCache = new Map();
+let youtubeSearchWindowStartedAt = Date.now();
+let youtubeSearchApiCalls = 0;
 let responseCacheBytes = 0;
 
 function parseAllowedHosts(value) {
@@ -843,6 +850,16 @@ app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async 
   }
   if (cached) youtubeSearchCache.delete(cacheKey);
 
+  if (Date.now() - youtubeSearchWindowStartedAt >= YOUTUBE_SEARCH_WINDOW_MS) {
+    youtubeSearchWindowStartedAt = Date.now();
+    youtubeSearchApiCalls = 0;
+  }
+  if (youtubeSearchApiCalls >= YOUTUBE_SEARCH_DAILY_CAP) {
+    return res.status(429).json({
+      error: "Schoolmathtime's daily YouTube search limit has been reached. Try again later."
+    });
+  }
+
   try {
     const endpoint = new URL(YOUTUBE_API_ENDPOINT);
     endpoint.searchParams.set("part", "snippet");
@@ -853,6 +870,8 @@ app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async 
     endpoint.searchParams.set("q", query);
     endpoint.searchParams.set("key", apiKey);
 
+    // Each uncached search request uses YouTube Data API quota.
+    youtubeSearchApiCalls += 1;
     const upstream = await fetch(endpoint, {
       method: "GET",
       headers: { Accept: "application/json" },
