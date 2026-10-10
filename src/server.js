@@ -897,7 +897,7 @@ app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async 
         description: String(snippet.description || "").slice(0, 700),
         channelTitle: String(snippet.channelTitle || "").slice(0, 160),
         publishedAt: String(snippet.publishedAt || ""),
-        thumbnail,
+        thumbnail: thumbnail ? "/resource?url=" + encodeURIComponent(thumbnail) : "",
         // Keep the navigation on Schoolmathtime; don't send a new tab directly
         // to YouTube and don't put an API key in any browser-visible URL.
         watchUrl: "/browse?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id)
