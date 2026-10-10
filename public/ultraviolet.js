@@ -360,7 +360,7 @@
 
   function isYouTubeOrGoogleSignin(value) {
     try {
-      const host = new URL(value).hostname.toLowerCase().replace(/\\.$/, "");
+      const host = new URL(value).hostname.toLowerCase().replace(/\.$/, "");
       return host === "youtube.com" || host.endsWith(".youtube.com") ||
         host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com") ||
         host === "accounts.google.com" || host === "myaccount.google.com" ||
