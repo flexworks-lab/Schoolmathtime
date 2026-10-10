@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Schoolmathtime Browser</title>
-  <link rel="stylesheet" href="/ultraviolet.css">
+  <link rel="stylesheet" href="/ultraviolet.css?v=smart-race-1">
   <script src="/baremux/index.js" defer></script>
   <script src="/uv/uv.bundle.js" defer></script>
   <script src="/uv/uv.config.js" defer></script>
-  <script src="/ultraviolet.js?v=wisp-mux-reset-1" defer></script>
+  <script src="/ultraviolet.js?v=smart-race-1" defer></script>
 </head>
 <body>
   <header class="uv-toolbar">
@@ -34,7 +34,8 @@
   </div>
   <pre id="uv-error" class="uv-error" hidden tabindex="0"></pre>
   <main class="uv-stage">
-    <iframe id="uv-frame" title="Proxied website" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    <iframe id="uv-frame" title="Ultraviolet browser candidate" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    <iframe id="classic-frame" title="Classic proxy candidate" referrerpolicy="no-referrer"></iframe>
     <div id="uv-welcome" class="uv-welcome">
       <div class="uv-welcome-mark">S</div>
       <h1>Browse with Ultraviolet</h1>
