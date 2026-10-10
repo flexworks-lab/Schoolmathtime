@@ -546,6 +546,21 @@ async function streamRemoteMedia(input, req, res, redirectCount = 0) {
     return;
   }
   const { target, addresses } = await validateTarget(input);
+  const mediaRateLimitKey = upstreamRateLimitKey(target.hostname);
+  if (isYouTubeUpstreamHost(target.hostname)) {
+    const cooldownUntil = upstreamCooldowns.get(mediaRateLimitKey) || 0;
+    if (cooldownUntil > Date.now()) {
+      const error = cooldownError(mediaRateLimitKey);
+      if (!res.headersSent) {
+        res.set("Retry-After", String(error.retryAfter));
+        res.status(429).type("text/plain").send(error.message);
+        return;
+      }
+      throw error;
+    }
+    if (cooldownUntil) upstreamCooldowns.delete(mediaRateLimitKey);
+  }
+
   await new Promise((resolve) => {
     const selected = addresses.find((entry) => entry.family === 4) || addresses[0];
     const headers = {
@@ -578,6 +593,29 @@ async function streamRemoteMedia(input, req, res, redirectCount = 0) {
       clearTimeout(timeout);
       const status = upstream.statusCode || 502;
       const location = upstream.headers.location;
+      if (isYouTubeUpstreamHost(target.hostname)) {
+        const contentType = String(upstream.headers["content-type"] || "unknown").split(";")[0];
+        console.info(
+          "Proxy /media upstream response:",
+          "host=" + target.hostname,
+          "status=" + status,
+          "type=" + contentType,
+          "method=" + (req.method || "GET"),
+          "range=" + (headers.Range ? "requested" : "none"),
+          "redirect=" + (location ? "yes" : "no")
+        );
+      }
+      if (status === 429 && isYouTubeUpstreamHost(target.hostname)) {
+        noteUpstreamRateLimit(mediaRateLimitKey, upstream.headers);
+        const error = cooldownError(mediaRateLimitKey);
+        upstream.resume();
+        if (!res.headersSent) {
+          res.set("Retry-After", String(error.retryAfter));
+          res.status(429).type("text/plain").send(error.message);
+        }
+        resolve();
+        return;
+      }
       if ([301, 302, 303, 307, 308].includes(status)) {
         upstream.resume();
         upstream.once("end", () => {
@@ -1036,7 +1074,19 @@ app.all("/media", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     if (!input) return res.status(400).type("text/plain").send("A media URL is required.");
     await streamRemoteMedia(input, req, res);
   } catch (error) {
-    if (!res.headersSent) res.status(Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 502).type("text/plain").send(error.message || "Media could not be loaded.");
+    let upstreamHost = "unknown";
+    try { upstreamHost = new URL(String(req.query.url || "")).hostname; } catch {}
+    const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 502;
+    console.warn(
+      "Proxy /media failed:",
+      status,
+      "host=" + upstreamHost,
+      "method=" + req.method,
+      "range=" + (req.headers.range ? "requested" : "none"),
+      error.message || "unknown error"
+    );
+    if (status === 429 && Number.isFinite(error.retryAfter)) res.set("Retry-After", String(error.retryAfter));
+    if (!res.headersSent) res.status(status).type("text/plain").send(error.message || "Media could not be loaded.");
     else res.destroy(error);
   }
 });
