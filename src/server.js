@@ -1224,9 +1224,10 @@ async function startServer() {
     wispServer.options.allow_udp_streams = false;
     wispServer.options.allow_tcp_streams = true;
     wispServer.options.port_whitelist = [443];
-    // Browsers open many parallel HTTPS connections when loading complex sites.
-    // These are per Wisp client connection; keep them above a normal page's needs.
-    wispServer.options.stream_limit_per_host = 16;
+    // Keep the global stream cap. Wisp 0.5.0's per-host limiter iterates its
+    // stream registry as an array even though it is an object, which can abort
+    // new stream creation; -1 bypasses that broken limiter while total stays bounded.
+    wispServer.options.stream_limit_per_host = -1;
     wispServer.options.stream_limit_total = 128;
     if (!ALLOWED_HOSTS.includes("*")) {
       wispServer.options.hostname_whitelist = ALLOWED_HOSTS.map((host) => {
