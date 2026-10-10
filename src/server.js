@@ -821,7 +821,7 @@ async function streamRemoteMedia(input, req, res, redirectCount = 0) {
   await new Promise((resolve) => {
     const selected = addresses.find((entry) => entry.family === 4) || addresses[0];
     const headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
       "Accept": "video/*,audio/*,image/*,application/octet-stream;q=0.9,*/*;q=0.8",
       "Accept-Encoding": "identity"
     };
@@ -1684,5 +1684,7 @@ module.exports = {
   isSupportedMediaFrame,
   isAllowedHost,
   isPublicAddress,
+  isTikTokUpstreamHost,
+  proxyDocument,
   scheduleYouTubeRequest
 };
