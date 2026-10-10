@@ -183,70 +183,6 @@ function normalizeInput(input) {
   return "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(value);
 }
 
-function getYouTubeVideoInfo(input) {
-  let url;
-  try { url = new URL(input); } catch { return null; }
-  if (url.protocol !== "https:") return null;
-  const host = url.hostname.toLowerCase();
-  const isYouTube = host === "youtu.be" || host === "youtube.com" ||
-    host.endsWith(".youtube.com") || host === "youtube-nocookie.com" ||
-    host.endsWith(".youtube-nocookie.com");
-  if (!isYouTube) return null;
-
-  let id = "";
-  let isShort = false;
-  if (host === "youtu.be") {
-    id = url.pathname.split("/").filter(Boolean)[0] || "";
-  } else if (url.pathname === "/watch") {
-    id = url.searchParams.get("v") || "";
-  } else {
-    const match = url.pathname.match(/^\/(shorts|live|embed)\/([A-Za-z0-9_-]{6,20})(?:\/|$)/);
-    if (match) {
-      id = match[2];
-      isShort = match[1] === "shorts";
-    }
-  }
-  if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) return null;
-  return { id, isShort };
-}
-
-function createYouTubePlayerDocument(info) {
-  // Render only the requested video. Loading the iframe in the visitor's
-  // browser avoids fetching the whole YouTube watch page through our server.
-  const id = encodeURIComponent(info.id);
-  const shortStyle = info.isShort
-    ? ".stm-yt-player{width:min(100vw,56.25vh);height:min(100vh,177.7778vw)}"
-    : ".stm-yt-player{width:min(100vw,177.7778vh);height:min(100vh,56.25vw)}";
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Video — Schoolmathtime</title>
-<style>
-  *{box-sizing:border-box}
-  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
-  body{display:grid;place-items:center}
-  .stm-yt-player{display:block;max-width:100vw;max-height:100vh;border:0;background:#000}
-  .stm-yt-player iframe{display:block;width:100%;height:100%;border:0}
-  ${shortStyle}
-</style>
-</head>
-<body>
-<main class="stm-yt-player" aria-label="Video player">
-<iframe
-  src="https://www.youtube.com/embed/${id}?playsinline=1&rel=0"
-  title="YouTube video"
-  loading="eager"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  allowfullscreen>
-</iframe>
-</main>
-</body>
-</html>`;
-}
 
 function isSupportedMediaFrame(target) {
   const host = target.hostname.toLowerCase().replace(/\.$/, "");
@@ -936,20 +872,8 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
       }
     } catch {}
 
-    // YouTube video links use a direct official embed in the visitor's browser.
-    // This skips the rate-limited server-side HTML fetch for /watch, Shorts,
-    // /live, and youtu.be links while leaving normal YouTube browsing proxied.
-    const videoInfo = getYouTubeVideoInfo(fetchTarget);
-    if (videoInfo) {
-      res.set({
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-      });
-      return res.status(200).send(createYouTubePlayerDocument(videoInfo));
-    }
+    // YouTube watch pages now follow the standard proxy path like other sites.
+    // This keeps the native watch-page UI, rather than returning an iframe-only page.
 
     let html;
     const result = await fetchApproved(fetchTarget, MAX_PAGE_BYTES);
@@ -1041,7 +965,6 @@ if (require.main === module) {
 module.exports = {
   app,
   normalizeInput,
-  getYouTubeVideoInfo,
   isSupportedMediaFrame,
   isAllowedHost,
   isPublicAddress,
