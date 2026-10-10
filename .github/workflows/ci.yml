@@ -42,5 +42,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.bundle.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'uv/service/'
+          curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'sw: "/uv/uv.sw.js"'
+          ! curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'sw: "/uv/sw.js"'
           curl --fail --silent http://127.0.0.1:3917/baremux/index.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/epoxy/index.mjs > /dev/null
