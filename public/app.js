@@ -30,7 +30,7 @@ function navigate(value) {
   const destination = isUrl
     ? query
     : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
-  window.location.assign("/browse?url=" + encodeURIComponent(destination));
+  window.location.assign("/ultraviolet.html?url=" + encodeURIComponent(destination));
 }
 
 function addShortcut(container, label, url, index = 0, canRemove = false) {
