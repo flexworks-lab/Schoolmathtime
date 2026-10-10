@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { createServer } = require("node:http");
 const dns = require("node:dns").promises;
 const net = require("node:net");
@@ -46,6 +47,26 @@ const requestedYouTubeDailyCap = Number(process.env.YOUTUBE_SEARCH_DAILY_CAP || 
 const YOUTUBE_SEARCH_DAILY_CAP = Number.isSafeInteger(requestedYouTubeDailyCap)
   ? Math.max(1, Math.min(90, requestedYouTubeDailyCap))
   : 80;
+const TIKTOK_HOST_ROOTS = [
+  "tiktok.com",
+  "tiktokv.com",
+  "tiktokcdn.com",
+  "tiktokcdn-us.com",
+  "tiktokcdn-eu.com",
+  "tiktokstatic.com",
+  "byteoversea.com",
+  "byteimg.com",
+  "ibyteimg.com",
+  "ibytedtos.com",
+  "pstatp.com",
+  "muscdn.com",
+  "ttwstatic.com",
+  "ttwebview.com",
+  "snssdk.com"
+];
+const TIKTOK_SESSION_COOKIE = "stm_tt_sid";
+const TIKTOK_SESSION_TTL_MS = 24 * 60 * 60_000;
+const tiktokCookieJars = new Map();
 const dnsCache = new Map();
 const responseCache = new Map();
 const rewrittenPageCache = new Map();
@@ -143,11 +164,24 @@ function allowPublicBrowsing(_req, _res, next) {
   return next();
 }
 
+function isTikTokUpstreamHost(hostname) {
+  const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  return TIKTOK_HOST_ROOTS.some((root) => host === root || host.endsWith("." + root));
+}
+
 function isAllowedHost(hostname) {
   const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
   if (!host || host.includes("..")) return false;
   if (ALLOWED_HOSTS.includes("*")) return true;
-  return ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith("." + allowed));
+  if (ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith("." + allowed))) return true;
+
+  // TikTok pages load their API and media from separate ByteDance/TikTok CDN
+  // domains. Enable those dependencies only when a TikTok host was explicitly
+  // approved in ALLOWED_HOSTS; do not turn this into a global host bypass.
+  const permitsTikTok = ALLOWED_HOSTS.some((allowed) =>
+    allowed === "tiktok.com" || allowed.endsWith(".tiktok.com")
+  );
+  return permitsTikTok && isTikTokUpstreamHost(host);
 }
 
 function isPublicAddress(address) {
@@ -283,6 +317,108 @@ function isYouTubeUpstreamHost(hostname) {
     host === "youtubei.googleapis.com" || host.endsWith(".youtubei.googleapis.com");
 }
 
+
+function getTikTokSession(req, res) {
+  const rawCookie = String(req.headers.cookie || "");
+  const match = rawCookie.match(new RegExp("(?:^|;\\s*)" + TIKTOK_SESSION_COOKIE + "=([a-f0-9]{32})(?:;|$)"));
+  let id = match ? match[1] : "";
+  let session = id ? tiktokCookieJars.get(id) : null;
+  const isNew = !id || !session || session.expiresAt <= Date.now();
+  if (isNew) {
+    id = crypto.randomBytes(16).toString("hex");
+    session = { cookies: new Map(), expiresAt: Date.now() + TIKTOK_SESSION_TTL_MS };
+    tiktokCookieJars.set(id, session);
+    const secure = process.env.NODE_ENV === "production" ||
+      String(process.env.PUBLIC_ORIGIN || "").startsWith("https://") || req.secure;
+    res.append("Set-Cookie", TIKTOK_SESSION_COOKIE + "=" + id +
+      "; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400" + (secure ? "; Secure" : ""));
+    while (tiktokCookieJars.size > 5000) tiktokCookieJars.delete(tiktokCookieJars.keys().next().value);
+  } else {
+    session.expiresAt = Date.now() + TIKTOK_SESSION_TTL_MS;
+    tiktokCookieJars.delete(id);
+    tiktokCookieJars.set(id, session);
+  }
+  return session;
+}
+
+function storeTikTokCookies(session, responseHost, rawCookies) {
+  if (!session || !rawCookies) return;
+  const lines = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
+  for (const line of lines) {
+    const parts = String(line || "").split(";");
+    const pair = parts.shift() || "";
+    const equal = pair.indexOf("=");
+    if (equal <= 0) continue;
+    const name = pair.slice(0, equal).trim();
+    const value = pair.slice(equal + 1).trim();
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) continue;
+
+    let domain = String(responseHost || "").toLowerCase();
+    let cookiePath = "/";
+    let expiresAt = Date.now() + TIKTOK_SESSION_TTL_MS;
+    let secure = false;
+    let remove = false;
+    for (const rawAttr of parts) {
+      const [rawKey, ...rawValue] = rawAttr.trim().split("=");
+      const key = String(rawKey || "").toLowerCase();
+      const attrValue = rawValue.join("=").trim();
+      if (key === "domain" && attrValue) domain = attrValue.toLowerCase().replace(/^\./, "");
+      if (key === "path" && attrValue.startsWith("/")) cookiePath = attrValue;
+      if (key === "secure") secure = true;
+      if (key === "max-age" && /^-?\d+$/.test(attrValue)) {
+        const seconds = Number(attrValue);
+        expiresAt = seconds <= 0 ? 0 : Date.now() + Math.min(seconds, 86400 * 30) * 1000;
+        if (seconds <= 0) remove = true;
+      }
+      if (key === "expires" && attrValue) {
+        const parsed = Date.parse(attrValue);
+        if (Number.isFinite(parsed) && parsed <= Date.now()) {
+          expiresAt = 0;
+          remove = true;
+        }
+      }
+    }
+    if (!isTikTokUpstreamHost(domain) ||
+        !(responseHost === domain || responseHost.endsWith("." + domain))) continue;
+    const key = domain + "|" + cookiePath + "|" + name;
+    if (remove || !value) session.cookies.delete(key);
+    else session.cookies.set(key, { name, value, domain, path: cookiePath, secure, expiresAt });
+  }
+  while (session.cookies.size > 200) session.cookies.delete(session.cookies.keys().next().value);
+}
+
+function getTikTokCookieHeader(session, target) {
+  if (!session) return "";
+  const host = target.hostname.toLowerCase();
+  const pathname = target.pathname || "/";
+  const now = Date.now();
+  const matches = [];
+  for (const [key, cookie] of session.cookies) {
+    if (cookie.expiresAt <= now) {
+      session.cookies.delete(key);
+      continue;
+    }
+    const domainMatches = host === cookie.domain || host.endsWith("." + cookie.domain);
+    const pathMatches = pathname === cookie.path || pathname.startsWith(cookie.path.endsWith("/") ? cookie.path : cookie.path + "/");
+    if (domainMatches && pathMatches && (!cookie.secure || target.protocol === "https:")) matches.push(cookie);
+  }
+  matches.sort((a, b) => b.path.length - a.path.length);
+  return matches.map((cookie) => cookie.name + "=" + cookie.value).join("; ");
+}
+
+async function readTikTokRequestBody(req) {
+  if (Buffer.isBuffer(req.body)) return req.body;
+  if (req.body != null && typeof req.body === "object") {
+    const contentType = String(req.headers["content-type"] || "").toLowerCase();
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      return Buffer.from(new URLSearchParams(req.body).toString());
+    }
+    return Buffer.from(JSON.stringify(req.body));
+  }
+  if (req.readableEnded) return Buffer.alloc(0);
+  return collectLimited(req, 2 * 1024 * 1024);
+}
+
 function upstreamRateLimitKey(hostname) {
   const host = String(hostname || "").toLowerCase().replace(/\\.$/, "");
   if (host === "youtubei.googleapis.com" || host.endsWith(".youtubei.googleapis.com")) return "youtubei.googleapis.com";
@@ -406,6 +542,7 @@ function readResponseCache(key, allowStale = false) {
     contentType: entry.contentType,
     body: Buffer.from(entry.body),
     status: entry.status,
+    headers: entry.headers || {},
     cached: true,
     stale: entry.expiresAt <= now
   };
@@ -430,6 +567,7 @@ function writeResponseCache(key, result) {
     contentType: result.contentType,
     body: Buffer.from(result.body),
     status: result.status,
+    headers: result.headers ? { "set-cookie": result.headers["set-cookie"] } : {},
     expiresAt: Date.now() + ttl,
     // Keep successful pages available for fallback during temporary upstream
     // throttling or timeouts. This is a stale-cache window, not a retry loop.
@@ -482,7 +620,7 @@ function writeRewrittenPageCache(key, html) {
   }
 }
 
-function requestPinned(target, addresses, maxBytes) {
+function requestPinned(target, addresses, maxBytes, options = {}) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error, value) => {
@@ -494,21 +632,29 @@ function requestPinned(target, addresses, maxBytes) {
     };
 
     const selected = addresses.find((entry) => entry.family === 4) || addresses[0];
+    const outboundMethod = String(options.method || "GET").toUpperCase();
+    const outboundHeaders = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip, br, deflate",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/css,*/*;q=0.8",
+      ...(options.headers || {})
+    };
+    const outboundBody = options.body == null ? null :
+      (Buffer.isBuffer(options.body) ? options.body : Buffer.from(options.body));
+    if (outboundBody && !Object.keys(outboundHeaders).some((name) => name.toLowerCase() === "content-length")) {
+      outboundHeaders["Content-Length"] = String(outboundBody.length);
+    }
     const request = https.request({
       protocol: "https:",
       hostname: target.hostname,
       port: 443,
       servername: target.hostname,
-      method: "GET",
+      method: outboundMethod,
       path: target.pathname + target.search,
       maxHeaderSize: 16 * 1024,
       agent: upstreamAgent,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, br, deflate",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/css,*/*;q=0.8"
-      },
+      headers: outboundHeaders,
       lookup: (_hostname, options, callback) => {
         if (options && options.all) callback(null, addresses);
         else callback(null, selected.address, selected.family);
@@ -578,7 +724,8 @@ function requestPinned(target, addresses, maxBytes) {
         finish(fetchError);
       }
     });
-    request.end();
+    if (outboundBody && outboundMethod !== "GET" && outboundMethod !== "HEAD") request.end(outboundBody);
+    else request.end();
   });
 }
 
@@ -641,7 +788,7 @@ async function fetchApproved(input, maxBytes, redirectCount = 0) {
   }
   const contentType = String(response.headers["content-type"] || "").toLowerCase();
   if (!response.body?.length) throw new Error("The remote website returned an empty response.");
-  const result = { target, contentType, body: response.body, status: response.status };
+  const result = { target, contentType, body: response.body, status: response.status, headers: response.headers || {} };
   writeResponseCache(cacheKey, result);
   return result;
 }
@@ -959,6 +1106,17 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
   }
 
   if (/(^|\.)tiktok\.com$/i.test(source.hostname)) {
+    const tiktokApiBridge = '(function(){var base=' + sourceLiteral + ';var roots=' +
+      JSON.stringify(TIKTOK_HOST_ROOTS) + ';function knownHost(host){host=String(host||"").toLowerCase();return roots.some(function(root){return host===root||host.endsWith("."+root)})}' +
+      'function mapped(raw){try{var value=raw&&typeof raw==="object"&&raw.url?raw.url:raw;var url=new URL(String(value),base);' +
+      'if(url.origin===location.origin&&/^\\/(?:api|node-api|passport|aweme|webcast|search|share|api2)(?:\\/|$)/i.test(url.pathname))url=new URL(url.pathname+url.search,base);' +
+      'if(url.protocol!=="https:"||!knownHost(url.hostname)||!/^\\/(?:api|node-api|passport|aweme|webcast|search|share|api2)(?:\\/|$)/i.test(url.pathname))return null;' +
+      'return "/tiktok-api?url="+encodeURIComponent(url.href)}catch(_){return null}}' +
+      'var nativeFetch=window.fetch;if(nativeFetch)window.fetch=function(input,init){var raw=input&&typeof input==="object"&&input.url?input.url:input;var route=mapped(raw);' +
+      'if(!route)return nativeFetch.apply(this,arguments);try{if(input instanceof Request)return nativeFetch.call(this,new Request(route,input.clone()),init)}catch(_){}return nativeFetch.call(this,route,init)};' +
+      'var open=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(method,url){var route=mapped(url);var args=Array.prototype.slice.call(arguments);args[1]=route||url;return open.apply(this,args)};' +
+      '})();';
+    $("head").prepend("<script>" + tiktokApiBridge + "</script>");
     $("head").append('<script>(function(){function go(event){var form=event.target;if(!form||!form.querySelector)return;var field=form.querySelector("input[name=q],input[name=keyword],input[data-e2e=search-user-input],input[placeholder*=Search]");if(!field)return;var query=String(field.value||"").trim();if(!query)return;event.preventDefault();event.stopImmediatePropagation();var target=new URL("https://www.tiktok.com/search");target.searchParams.set("q",query);window.location.assign("/browse?url="+encodeURIComponent(target.toString()))}document.addEventListener("submit",go,true);document.addEventListener("keydown",function(event){if(event.key!=="Enter")return;var field=event.target;if(!field||!field.matches||!field.matches("input[name=q],input[name=keyword],input[data-e2e=search-user-input],input[placeholder*=Search]")||!field.form)return;go({target:field.form,preventDefault:function(){event.preventDefault()},stopImmediatePropagation:function(){event.stopImmediatePropagation()}})},true)})();</script>');
   }
 
@@ -1209,7 +1367,12 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     // This keeps the native watch-page UI, rather than returning an iframe-only page.
 
     let html;
+    let tiktokSession = null;
+    try {
+      if (isTikTokUpstreamHost(new URL(fetchTarget).hostname)) tiktokSession = getTikTokSession(req, res);
+    } catch {}
     const result = await fetchApproved(fetchTarget, MAX_PAGE_BYTES);
+    if (tiktokSession) storeTikTokCookies(tiktokSession, result.target.hostname, result.headers?.["set-cookie"]);
     if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
       return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
     }
@@ -1234,6 +1397,96 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     if (status === 429 && Number.isFinite(error.retryAfter)) res.set("Retry-After", String(error.retryAfter));
     console.warn("Proxy /browse failed:", status, error.upstreamHost || "", error.message || "unknown error");
     res.status(status).send(errorDocument(error.message || "The page could not be opened.", "Return home and try again, or choose another approved destination."));
+  }
+});
+
+
+app.all("/tiktok-api", allowPublicBrowsing, fetchLimiter, async (req, res) => {
+  const method = String(req.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    return res.status(405).set("Allow", "GET, HEAD, POST, PUT, PATCH, DELETE").end();
+  }
+
+  let session;
+  try {
+    const rawTarget = String(req.query.url || "");
+    let target = new URL(rawTarget);
+    if (target.protocol !== "https:" || !isTikTokUpstreamHost(target.hostname)) {
+      return res.status(403).type("text/plain").send("TikTok API destination blocked.");
+    }
+    session = getTikTokSession(req, res);
+    let requestMethod = method;
+    let requestBody = ["GET", "HEAD"].includes(requestMethod) ? null : await readTikTokRequestBody(req);
+    if (requestBody?.length > 2 * 1024 * 1024) {
+      return res.status(413).type("text/plain").send("TikTok API request is too large.");
+    }
+
+    let upstream;
+    for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+      const validated = await validateTarget(target.toString());
+      target = validated.target;
+      if (!isTikTokUpstreamHost(target.hostname)) {
+        return res.status(403).type("text/plain").send("TikTok API redirect destination blocked.");
+      }
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "Accept": String(req.headers.accept || "*/*").slice(0, 500),
+        "Accept-Language": String(req.headers["accept-language"] || "en-US,en;q=0.9").slice(0, 200),
+        "Referer": "https://www.tiktok.com/",
+        "Origin": "https://www.tiktok.com",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty"
+      };
+      const contentType = String(req.headers["content-type"] || "");
+      if (contentType && !/[\r\n]/.test(contentType)) headers["Content-Type"] = contentType.slice(0, 200);
+      const cookieHeader = getTikTokCookieHeader(session, target);
+      if (cookieHeader) headers.Cookie = cookieHeader;
+      for (const name of ["x-secsdk-csrf-token", "x-tt-params", "x-tt-logid", "x-tt-trace-id", "x-tt-token"]) {
+        const value = req.headers[name];
+        if (typeof value === "string" && !/[\r\n]/.test(value)) headers[name] = value.slice(0, 2000);
+      }
+
+      upstream = await requestPinned(target, validated.addresses, MAX_RESOURCE_BYTES, {
+        method: requestMethod,
+        headers,
+        body: requestBody
+      });
+      storeTikTokCookies(session, target.hostname, upstream.headers?.["set-cookie"]);
+
+      if (![301, 302, 303, 307, 308].includes(upstream.status)) break;
+      if (!upstream.location || redirectCount === MAX_REDIRECTS) {
+        return res.status(502).type("text/plain").send("TikTok API redirected too many times.");
+      }
+      const nextTarget = new URL(upstream.location, target);
+      if (nextTarget.protocol !== "https:" || !isTikTokUpstreamHost(nextTarget.hostname)) {
+        return res.status(502).type("text/plain").send("TikTok API redirect destination blocked.");
+      }
+      if (upstream.status === 303 || ([301, 302].includes(upstream.status) && requestMethod === "POST")) {
+        requestMethod = "GET";
+        requestBody = null;
+      }
+      target = nextTarget;
+    }
+
+    res.set({
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer"
+    });
+    const upstreamType = String(upstream?.headers?.["content-type"] || "application/octet-stream");
+    if (!/[\r\n]/.test(upstreamType)) res.set("Content-Type", upstreamType);
+    for (const name of ["cache-control", "vary", "x-tt-logid"]) {
+      const value = upstream?.headers?.[name];
+      if (typeof value === "string" && !/[\r\n]/.test(value)) res.set(name, value);
+    }
+    res.status(upstream?.status || 502);
+    if (method === "HEAD") return res.end();
+    return res.send(upstream?.body || Buffer.alloc(0));
+  } catch (error) {
+    const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 502;
+    console.warn("TikTok API proxy failed:", status, error.message || "unknown error");
+    return res.status(status).type("text/plain").send("TikTok API request failed: " + String(error.message || "unknown error").slice(0, 300));
   }
 });
 
