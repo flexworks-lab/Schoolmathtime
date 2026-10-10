@@ -43,6 +43,10 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/index.html | grep -q 'id="youtubeAccountConnect"'
           curl --fail --silent http://127.0.0.1:3917/youtube-account.js | grep -q 'Google sign-in needs setup'
           grep -q 'GOOGLE_OAUTH_CLIENT_SECRET' README.md
+          grep -q 'state !== stateCookie' src/server.js
+          curl --fail --silent http://127.0.0.1:3917/privacy.html | grep -q 'Privacy Policy'
+          curl --fail --silent http://127.0.0.1:3917/terms.html | grep -q 'Terms of Use'
+          curl --fail --silent http://127.0.0.1:3917/index.html | grep -q 'href="/privacy.html"'
           grep -q 'code_challenge_method: "S256"' src/server.js
           grep -q 'GOOGLE_YOUTUBE_READONLY_SCOPE' src/server.js
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'

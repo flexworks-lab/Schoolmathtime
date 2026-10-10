@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="Schoolmathtime privacy policy, including Google OAuth and YouTube Data API access.">
+  <title>Privacy Policy — Schoolmathtime</title>
+  <link rel="stylesheet" href="/styles.css?v=google-oauth-policy-1">
+</head>
+<body>
+  <div class="legal-page">
+    <header class="legal-page-header">
+      <a class="legal-page-brand" href="/">Schoolmathtime</a>
+      <nav class="legal-page-nav" aria-label="Legal pages">
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+      </nav>
+    </header>
+    <main class="legal-page-main">
+      <h1>Privacy Policy</h1>
+      <p class="legal-page-updated">Last updated: October 10, 2026</p>
+      <p>Schoolmathtime is a browser-style web proxy with optional YouTube search and an optional connection to Google and YouTube account data. This policy explains what happens when you use the connection feature.</p>
+      <h2>Information accessed through Google</h2>
+      <p>If you choose Connect with Google, Schoolmathtime asks Google for permission to view basic Google profile information and read-only YouTube account data. It may receive your display name, email address, and YouTube channel name and identifier. The request uses Google's OAuth authorization-code flow with PKCE. Schoolmathtime never asks for or receives your Google password.</p>
+      <h2>How account data is used</h2>
+      <p>Account information is used only to show which account is connected and to enable read-only YouTube Data API features. Schoolmathtime does not sell this account information or use it for advertising. The access token is held on the application server and is not sent to browser JavaScript.</p>
+      <h2>Storage and retention</h2>
+      <p>The current implementation stores the short-lived OAuth state, access token, and displayed account details in server memory only. It does not write these values to a database or disk. The connection expires when the access token expires or the server restarts. Server memory is cleared on restart. A random session identifier is placed in a Secure (in production), HttpOnly, SameSite=Lax cookie.</p>
+      <h2>Disconnecting and revocation</h2>
+      <p>Use Disconnect in the YouTube account panel to clear the local session and ask Google to revoke the access token. If Google's revocation endpoint is temporarily unavailable, the Schoolmathtime session is still cleared; you can also review or remove access from your <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">Google Account permissions</a>.</p>
+      <h2>Browsing and service-provider logs</h2>
+      <p>When you browse websites through Schoolmathtime, the service must process the destination URL and request data to retrieve the page. The hosting provider may maintain routine infrastructure or security logs. Avoid entering sensitive or confidential information into proxied websites, and review each destination site's own privacy policy.</p>
+      <h2>Google services</h2>
+      <p>Use of Google's services is also subject to the <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google Privacy Policy</a>. Schoolmathtime's OAuth connection uses the YouTube Data API and requests read-only access; it does not create a signed-in browser session on the proxied YouTube website.</p>
+      <h2>Questions and changes</h2>
+      <p>This policy may be updated as Schoolmathtime features change. If you maintain or deploy your own copy, update this policy with your correct operator contact and data practices before enabling public OAuth access.</p>
+      <p><a href="/">Return to Schoolmathtime</a></p>
+    </main>
+  </div>
+</body>
+</html>

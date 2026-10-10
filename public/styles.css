@@ -363,3 +363,57 @@ button { cursor: pointer; }
   .youtube-account-actions { justify-content: stretch; }
   .youtube-account-actions button { flex: 1; }
 }
+
+
+/* Public policy pages used by the Google OAuth setup */
+.legal-page {
+  min-height: 100vh;
+  padding: 22px 20px 60px;
+  background: #17181b;
+}
+.legal-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 10px 0 22px;
+  border-bottom: 1px solid #303238;
+}
+.legal-page-brand {
+  color: #e8eaed;
+  font-size: 15px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.legal-page-nav { display: flex; gap: 14px; }
+.legal-page-nav a, .browser-statusbar a {
+  color: #b8c9e9;
+  font-size: 10px;
+  text-decoration: none;
+}
+.legal-page-nav a:hover, .browser-statusbar a:hover { text-decoration: underline; }
+.legal-page-main {
+  width: min(760px, 100%);
+  margin: 32px auto 0;
+  color: #cbd0da;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.legal-page-main h1 {
+  margin: 0 0 8px;
+  color: #f1f3f4;
+  font-size: clamp(26px, 4vw, 35px);
+  font-weight: 600;
+  letter-spacing: -.8px;
+}
+.legal-page-main h2 {
+  margin: 28px 0 8px;
+  color: #e8eaed;
+  font-size: 16px;
+}
+.legal-page-main p, .legal-page-main li { color: #b1b7c2; }
+.legal-page-main a { color: #c5d7f9; }
+.legal-page-updated { margin: 0 0 24px; color: #838a96 !important; font-size: 11px; }
+.legal-page-main ul { padding-left: 22px; }

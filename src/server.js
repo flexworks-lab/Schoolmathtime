@@ -51,6 +51,7 @@ const GOOGLE_OAUTH_SCOPES = "openid email profile " + GOOGLE_YOUTUBE_READONLY_SC
 const YOUTUBE_OAUTH_STATE_TTL_MS = 10 * 60_000;
 const YOUTUBE_OAUTH_SESSION_MAX_MS = 60 * 60_000;
 const YOUTUBE_OAUTH_SESSION_COOKIE = "stm_yt_sid";
+const YOUTUBE_OAUTH_STATE_COOKIE = "stm_yt_oauth_state";
 const youtubeOAuthStates = new Map();
 const youtubeOAuthSessions = new Map();
 const YOUTUBE_SEARCH_WINDOW_MS = 24 * 60 * 60_000;
@@ -227,6 +228,25 @@ function getYouTubeSessionId(req) {
   const cookie = String(req.headers.cookie || "");
   const match = cookie.match(/(?:^|;\s*)stm_yt_sid=([a-f0-9]{64})(?:;|$)/);
   return match ? match[1] : "";
+}
+
+
+function getYouTubeOAuthStateCookie(req) {
+  const cookie = String(req.headers.cookie || "");
+  const match = cookie.match(/(?:^|;\s*)stm_yt_oauth_state=([a-f0-9]{64})(?:;|$)/);
+  return match ? match[1] : "";
+}
+
+function setYouTubeOAuthStateCookie(req, res, state) {
+  const secure = isSecureYouTubeCookie(req) ? "; Secure" : "";
+  res.append("Set-Cookie", YOUTUBE_OAUTH_STATE_COOKIE + "=" + state +
+    "; Path=/; HttpOnly; SameSite=Lax; Max-Age=600" + secure);
+}
+
+function clearYouTubeOAuthStateCookie(req, res) {
+  const secure = isSecureYouTubeCookie(req) ? "; Secure" : "";
+  res.append("Set-Cookie", YOUTUBE_OAUTH_STATE_COOKIE +
+    "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" + secure);
 }
 
 function isSecureYouTubeCookie(req) {
@@ -1336,19 +1356,27 @@ app.get("/auth/google/start", youtubeOAuthLimiter, (req, res) => {
     access_type: "online",
     prompt: "select_account"
   });
+  setYouTubeOAuthStateCookie(req, res, state);
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   return res.redirect(302, GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT + "?" + params.toString());
 });
 
 app.get("/auth/google/callback", youtubeOAuthLimiter, async (req, res) => {
   res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  const googleError = String(req.query.error || "");
-  if (googleError) return oauthReturn(res, googleError === "access_denied" ? "denied" : "error");
-
   const state = String(req.query.state || "");
+  const stateCookie = getYouTubeOAuthStateCookie(req);
   const pending = state ? youtubeOAuthStates.get(state) : null;
   if (state) youtubeOAuthStates.delete(state);
-  if (!pending || pending.expiresAt <= Date.now()) return oauthReturn(res, "state_error");
+  clearYouTubeOAuthStateCookie(req, res);
+  // Bind the authorization callback to the browser that started it. State in
+  // the URL alone is not enough to prevent an attacker from tricking another
+  // user into completing the attacker's login flow.
+  if (!state || !stateCookie || state !== stateCookie || !pending || pending.expiresAt <= Date.now()) {
+    return oauthReturn(res, "state_error");
+  }
+
+  const googleError = String(req.query.error || "");
+  if (googleError) return oauthReturn(res, googleError === "access_denied" ? "denied" : "error");
 
   const code = String(req.query.code || "");
   if (!code || code.length > 4096) return oauthReturn(res, "token_error");

@@ -44,7 +44,7 @@ To enable it:
    - **GOOGLE_OAUTH_REDIRECT_URI** — the exact callback registered in Cloud Console, ending in /auth/google/callback (for example, https://YOUR-SCHOOLMATHTIME-HOST/auth/google/callback).
 5. Redeploy Schoolmathtime and use **Connect with Google** in the YouTube video search panel.
 
-The access token is exchanged and held only in server memory; it is not sent to the browser and is not persisted to disk. The connection expires with the token or a server restart, so the user may need to reconnect. Disconnect attempts to revoke the token with Google's revocation endpoint. Public apps requesting user-data scopes may need Google OAuth verification before use beyond the configured test users; follow the requirements shown in Cloud Console.
+The access token is exchanged and held only in server memory; it is not sent to the browser and is not persisted to disk. The connection expires with the token or a server restart, so the user may need to reconnect. Disconnect attempts to revoke the token with Google's revocation endpoint. Public apps requesting user-data scopes may need Google OAuth verification before use beyond the configured test users; follow the requirements shown in Cloud Console. The home page links to the current privacy policy at /privacy.html and terms at /terms.html; review and update these texts to reflect your actual operator contact and data practices before requesting production verification. Google requires production OAuth apps to meet its verified-domain and homepage-policy requirements.
 
 ## Ultraviolet browser engine
 
