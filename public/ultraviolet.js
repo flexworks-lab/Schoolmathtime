@@ -88,7 +88,7 @@
     const transport = "/epoxy/index.mjs";
     if (await connection.getTransport() !== transport) {
       const wispUrl = "wss://" + location.host + "/wisp/";
-      await connection.setTransport(transport, [{ wisp: wispUrl }]);
+      await connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]);
     }
   }
 
