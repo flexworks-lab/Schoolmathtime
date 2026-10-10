@@ -18,7 +18,7 @@ Entering a search phrase opens `https://www.google.com/search?q=...` through the
 
 ## YouTube API search
 
-The home page includes a YouTube search panel backed by the official YouTube Data API v3. Search results and thumbnail metadata are fetched server-side; the API key is read only from the `YOUTUBE_API_KEY` environment variable and is never sent to browser JavaScript. Search result links stay on Schoolmathtime and use `/youtube-player`, which presents YouTube's official player in an iframe. This avoids fetching YouTube's watch-page HTML from the Schoolmathtime server. Playback can still be unavailable if a video owner disables embedding, YouTube restricts the video, or a network blocks the player.
+The home page includes a YouTube search panel backed by the official YouTube Data API v3. Search results and thumbnail metadata are fetched server-side; the API key is read only from the `YOUTUBE_API_KEY` environment variable and is never sent to browser JavaScript. Search result links stay inside Schoolmathtime and open the native YouTube watch page through `/browse`. The API returns video metadata, not the native watch-page HTML or a video stream, so playback can still fail if YouTube rejects the proxy request.
 
 To enable search:
 
@@ -31,7 +31,7 @@ The default code limit is 80 uncached searches per rolling 24-hour window to pre
 
 ## Video, JavaScript, and security
 
-YouTube search is backed by the official Data API. Search results play through the official YouTube player inside Schoolmathtime at `/youtube-player`; the app does not attempt to scrape native YouTube watch-page HTML for those results. The player page preserves the referrer information required by YouTube's embedded-player rules. Manually entered YouTube watch URLs still use the generic proxy route and may receive HTTP 429.
+YouTube search is backed by the official Data API. Search-result clicks open the native YouTube watch URL through the standard Schoolmathtime proxy route and do not redirect users externally or use a custom embedded player. YouTube may still rate-limit server-side watch-page requests with HTTP 429; the search API does not supply native watch-page HTML or the video stream.
 
 Supported video embeds (including Vimeo, Twitch, Dailymotion, Spotify, SoundCloud, Loom, TikTok, and Bilibili) can run in their own frames. HTML5 audio/video sources use a streaming route with byte-range support. Playback still depends on provider rules, CORS, browser APIs, licensing, age restrictions, and whether the uploader permits embedding. No generic proxy can make every site behave exactly as it does on its native origin.
 
