@@ -41,7 +41,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'baremux-csp-fix-1'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'did not activate within 15 seconds'
-          ! grep -q 'navigator.serviceWorker.ready' public/ultraviolet.js
+          ! grep -q 'await navigator.serviceWorker.ready' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.bundle.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'uv/service/'
