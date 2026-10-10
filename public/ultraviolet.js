@@ -46,8 +46,44 @@
     if (!navigator.serviceWorker) throw new Error("This browser does not support service workers. Open Schoolmathtime over HTTPS in a compatible browser.");
     if (typeof BareMux === "undefined") throw new Error("Ultraviolet transport files did not load.");
     if (typeof __uv$config === "undefined") throw new Error("Ultraviolet configuration did not load.");
-    await navigator.serviceWorker.register("/uv/sw.js", { updateViaCache: "none" });
-    await navigator.serviceWorker.ready;
+    // The worker is deliberately scoped to /uv/, which covers proxied
+    // iframe URLs but not /ultraviolet.html itself. Do not await
+    // navigator.serviceWorker.ready here: ready waits for a registration
+    // controlling the current page's scope and can hang forever.
+    const registration = await navigator.serviceWorker.register("/uv/sw.js", {
+      updateViaCache: "none"
+    });
+    let worker = registration.installing || registration.waiting || registration.active;
+    if (!worker) {
+      await registration.update();
+      worker = registration.installing || registration.waiting || registration.active;
+    }
+    if (!worker) throw new Error("Ultraviolet's service worker did not create an install or active worker.");
+
+    if (worker.state !== "activated") {
+      await new Promise((resolve, reject) => {
+        let timer;
+        const cleanup = () => {
+          if (timer) window.clearTimeout(timer);
+          worker.removeEventListener("statechange", onStateChange);
+        };
+        const onStateChange = () => {
+          if (worker.state === "activated") {
+            cleanup();
+            resolve();
+          } else if (worker.state === "redundant") {
+            cleanup();
+            reject(new Error("Ultraviolet's service worker failed during installation. Reload the page and check the service worker script and config."));
+          }
+        };
+        timer = window.setTimeout(() => {
+          cleanup();
+          reject(new Error("Ultraviolet's service worker did not activate within 15 seconds. The worker may be blocked or its script/config may be stale."));
+        }, 15000);
+        worker.addEventListener("statechange", onStateChange);
+        onStateChange();
+      });
+    }
     if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js");
     const transport = "/epoxy/index.mjs";
     if (await connection.getTransport() !== transport) {
