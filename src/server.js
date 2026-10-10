@@ -857,21 +857,6 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     // then fetched and rendered through the same Schoolmathtime proxy as URLs.
     const target = normalizeInput(rawInput);
 
-    // Do not fetch YouTube's native application from this server. YouTube has
-    // been returning HTTP 429 to the server-side fetch, and a proxy must not
-    // try to evade that limit. Send YouTube links to the official site directly;
-    // the visitor's network/device policies will apply normally.
-    try {
-      const directTarget = new URL(target);
-      const host = directTarget.hostname.toLowerCase().replace(/\.$/, "");
-      const isYouTube = host === "youtube.com" || host.endsWith(".youtube.com") ||
-        host === "youtu.be" || host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com");
-      if (directTarget.protocol === "https:" && isYouTube) {
-        res.set({ "Cache-Control": "no-store", "Referrer-Policy": "strict-origin-when-cross-origin" });
-        return res.redirect(302, directTarget.toString());
-      }
-    } catch {}
-
     // TikTok's desktop landing page is more reliable at /foryou than the bare
     // root when fetched server-side. Change only the bare homepage; preserve
     // every supplied profile and video URL.
