@@ -7,10 +7,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check public/app.js"
+    "check": "node --check src/server.js && node --check public/app.js && node --check public/proxy-chrome.js && node --check public/ultraviolet.js"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "cheerio": "1.0.0",
@@ -18,6 +18,10 @@
     "express-rate-limit": "7.5.0",
     "express-session": "1.19.0",
     "helmet": "8.1.0",
-    "ipaddr.js": "2.2.0"
+    "ipaddr.js": "2.2.0",
+    "@mercuryworkshop/bare-mux": "2.1.8",
+    "@mercuryworkshop/epoxy-transport": "2.1.28",
+    "@titaniumnetwork-dev/ultraviolet": "3.2.10",
+    "@mercuryworkshop/wisp-js": "0.4.0"
   }
 }
