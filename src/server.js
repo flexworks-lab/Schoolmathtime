@@ -14,8 +14,9 @@ const ipaddr = require("ipaddr.js");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const MAX_PAGE_BYTES = 5 * 1024 * 1024;
-const MAX_RESOURCE_BYTES = 12 * 1024 * 1024;
+// Some modern applications ship large HTML bootstraps and JavaScript bundles.
+const MAX_PAGE_BYTES = 8 * 1024 * 1024;
+const MAX_RESOURCE_BYTES = 24 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_REDIRECTS = 5;
 const DNS_CACHE_TTL_MS = 30_000;
@@ -249,6 +250,12 @@ function isSupportedMediaFrame(target) {
   if (host === "www.tiktok.com" && path.startsWith("/embed/")) return true;
   if (host === "www.facebook.com" && path === "/plugins/video.php") return true;
   if (host === "player.bilibili.com" && path === "/player.html") return true;
+  if ((host === "rumble.com" || host.endsWith(".rumble.com")) && path.startsWith("/embed/")) return true;
+  if (host === "iframe.videodelivery.net" && path.length > 1) return true;
+  if (host === "iframe.mediadelivery.net" && path.startsWith("/embed/")) return true;
+  if (host === "www.instagram.com" && /^\/(?:p|reel|tv)\/[^/]+\/embed\/?$/.test(path)) return true;
+  if (host === "platform.twitter.com" && path.startsWith("/embed/")) return true;
+  if (host === "www.redditmedia.com" && path.includes("/mediaembed/")) return true;
   return false;
 }
 
@@ -752,7 +759,31 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     for (const [name, originalValue] of Object.entries(attrs)) {
       const lower = name.toLowerCase();
       const value = String(originalValue || "").trim();
-      if (["srcdoc", "action", "formaction", "integrity", "nonce", "crossorigin"].includes(lower)) {
+      if (lower === "action" && element.tagName === "form") {
+        try {
+          const actionUrl = new URL(value || sourceUrl, sourceUrl);
+          if (["https:", "http:"].includes(actionUrl.protocol) && isAllowedHost(actionUrl.hostname)) {
+            node.attr("data-stm-action", actionUrl.toString());
+          } else {
+            node.removeAttr("data-stm-action");
+          }
+        } catch { node.removeAttr("data-stm-action"); }
+        node.removeAttr(name);
+        continue;
+      }
+      if (lower === "formaction") {
+        try {
+          const actionUrl = new URL(value, sourceUrl);
+          if (["https:", "http:"].includes(actionUrl.protocol) && isAllowedHost(actionUrl.hostname)) {
+            node.attr("data-stm-formaction", actionUrl.toString());
+          } else {
+            node.removeAttr("data-stm-formaction");
+          }
+        } catch { node.removeAttr("data-stm-formaction"); }
+        node.removeAttr(name);
+        continue;
+      }
+      if (["srcdoc", "integrity", "nonce", "crossorigin"].includes(lower)) {
         node.removeAttr(name);
         continue;
       }
@@ -1110,7 +1141,7 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' https: wss:; object-src 'none'; frame-src https://*.youtube.com https://*.youtube-nocookie.com https://player.vimeo.com https://open.spotify.com https://w.soundcloud.com https://*.dailymotion.com https://player.twitch.tv https://clips.twitch.tv https://www.loom.com https://www.tiktok.com https://www.facebook.com https://player.bilibili.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; worker-src 'self' blob:"
+      "Content-Security-Policy": "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' https: wss:; object-src 'none'; frame-src https://*.youtube.com https://*.youtube-nocookie.com https://player.vimeo.com https://open.spotify.com https://w.soundcloud.com https://*.dailymotion.com https://player.twitch.tv https://clips.twitch.tv https://www.loom.com https://www.tiktok.com https://www.facebook.com https://player.bilibili.com https://*.rumble.com https://iframe.videodelivery.net https://iframe.mediadelivery.net https://www.instagram.com https://platform.twitter.com https://*.redditmedia.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; worker-src 'self' blob:"
     });
     res.status(200).send(html);
   } catch (error) {
