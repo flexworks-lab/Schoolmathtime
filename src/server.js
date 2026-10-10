@@ -1215,14 +1215,19 @@ async function startServer() {
 
     // Bound the tunnel to HTTPS and deny private/loopback IP targets. If
     // ALLOWED_HOSTS is explicit, apply the same host restrictions to Wisp.
+    wispServer.options.wisp_version = 2;
+    // Prefer IPv4 on hosts where outbound IPv6 routing is unavailable.
+    wispServer.options.dns_result_order = "ipv4first";
     wispServer.options.allow_direct_ip = false;
     wispServer.options.allow_private_ips = false;
     wispServer.options.allow_loopback_ips = false;
     wispServer.options.allow_udp_streams = false;
     wispServer.options.allow_tcp_streams = true;
     wispServer.options.port_whitelist = [443];
-    wispServer.options.stream_limit_per_host = 8;
-    wispServer.options.stream_limit_total = 32;
+    // Browsers open many parallel HTTPS connections when loading complex sites.
+    // These are per Wisp client connection; keep them above a normal page's needs.
+    wispServer.options.stream_limit_per_host = 16;
+    wispServer.options.stream_limit_total = 128;
     if (!ALLOWED_HOSTS.includes("*")) {
       wispServer.options.hostname_whitelist = ALLOWED_HOSTS.map((host) => {
         const escaped = host.split(".").map((part) =>
