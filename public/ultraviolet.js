@@ -292,13 +292,22 @@ oded);
     void openTarget(address.value);
   });
   byId("uv-back").addEventListener("click", () => {
-    try { frame.contentWindow.history.back(); } catch { history.back(); }
+    try {
+      const activeFrame = activeEngine === "classic" ? classicFrame : frame;
+      if (activeEngine) activeFrame.contentWindow.history.back();
+      else history.back();
+    } catch { history.back(); }
   });
   byId("uv-forward").addEventListener("click", () => {
-    try { frame.contentWindow.history.forward(); } catch { history.forward(); }
+    try {
+      const activeFrame = activeEngine === "classic" ? classicFrame : frame;
+      if (activeEngine) activeFrame.contentWindow.history.forward();
+      else history.forward();
+    } catch { history.forward(); }
   });
   byId("uv-refresh").addEventListener("click", () => {
-    if (address.value.trim()) void openTarget(address.value, false);
+    const target = currentTarget() || address.value.trim();
+    if (target) void openTarget(target, false);
     else location.reload();
   });
   byId("uv-classic").addEventListener("click", () => {
@@ -338,9 +347,18 @@ oded);
   });
   frame.addEventListener("load", () => {
     if (!frame.src || frame.src === "about:blank") return;
-    hasLoaded = true;
-    setStatus("Page loaded. Some websites restrict proxy-based browsing.");
-    refreshBookmarkState();
+    if (raceAttempt && raceAttempt.pending.uv) {
+      handleCandidateLoad("uv");
+      return;
+    }
+    if (activeEngine === "uv") {
+      hasLoaded = true;
+      setStatus("Page loaded through Ultraviolet. Some websites may still restrict scripts or media.");
+      refreshBookmarkState();
+    }
+  });
+  classicFrame.addEventListener("load", () => {
+    handleCandidateLoad("classic");
   });
   window.addEventListener("popstate", (event) => {
     const target = event.state?.target;
