@@ -266,13 +266,6 @@
     return lastTarget;
   }
 
-oded);
-        if (target.protocol === "https:") return target.toString();
-      }
-    } catch {}
-    return lastTarget;
-  }
-
   function readBookmarks() {
     try {
       const items = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || "[]");
