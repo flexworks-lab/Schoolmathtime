@@ -64,7 +64,7 @@
     const destination = isUrl
       ? raw
       : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(raw);
-    window.location.assign("/browse?url=" + encodeURIComponent(destination));
+    window.location.assign("/ultraviolet.html?url=" + encodeURIComponent(destination));
   });
 
   find("stm-back")?.addEventListener("click", () => window.history.back());
