@@ -1230,7 +1230,25 @@ async function startServer() {
     wispServer.options.stream_limit_per_host = -1;
     wispServer.options.stream_limit_total = 128;
     if (!ALLOWED_HOSTS.includes("*")) {
-      wispServer.options.hostname_whitelist = ALLOWED_HOSTS.map((host) => {
+      // YouTube's watch page loads media and comments from separate Google
+      // hosts. When YouTube itself is explicitly allowed, allow only its
+      // fixed media/API dependencies through Wisp as well.
+      const wispAllowedHosts = new Set(ALLOWED_HOSTS);
+      const permitsYouTube = ALLOWED_HOSTS.some((host) =>
+        host === "youtube.com" || host.endsWith(".youtube.com")
+      );
+      if (permitsYouTube) {
+        for (const host of [
+          "googlevideo.com",
+          "youtubei.googleapis.com",
+          "youtube-nocookie.com",
+          "ytimg.com",
+          "ggpht.com"
+        ]) {
+          wispAllowedHosts.add(host);
+        }
+      }
+      wispServer.options.hostname_whitelist = [...wispAllowedHosts].map((host) => {
         const escaped = host.split(".").map((part) =>
           part.replace(/[.*+?^$()|[\]\\]/g, (character) => "\\" + character)
         ).join("\\.");
