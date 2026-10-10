@@ -868,9 +868,12 @@ app.use(express.static(path.join(__dirname, "..", "public"), {
   index: "index.html",
   maxAge: process.env.NODE_ENV === "production" ? "1h" : 0,
   setHeaders(res, filePath) {
-    // Keep HTML shells fresh so navigation/cache-buster fixes reach browsers
-    // promptly; static CSS, JavaScript and media can still use their asset TTL.
-    if (/\.html?$/i.test(filePath)) res.setHeader("Cache-Control", "no-cache");
+    // Keep HTML and the service-worker entry/config fresh. A stale uv.config.js
+    // can make /uv/sw.js recursively import itself after a configuration fix.
+    if (/\.html?$/i.test(filePath) ||
+        /[/\\\\]uv[/\\\\](?:uv\.config\.js|sw\.js)$/i.test(filePath)) {
+      res.setHeader("Cache-Control", "no-cache");
+    }
   }
 }));
 
