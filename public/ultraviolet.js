@@ -474,6 +474,11 @@
     }
     if (activeEngine === "uv") {
       hasLoaded = true;
+      const activeTarget = currentTarget();
+      if (activeTarget) {
+        lastTarget = activeTarget;
+        address.value = activeTarget;
+      }
       setUltravioletLoadedStatus();
       refreshBookmarkState();
     }
