@@ -46,7 +46,7 @@
     if (!navigator.serviceWorker) throw new Error("This browser does not support service workers. Open Schoolmathtime over HTTPS in a compatible browser.");
     if (typeof BareMux === "undefined") throw new Error("Ultraviolet transport files did not load.");
     if (typeof __uv$config === "undefined") throw new Error("Ultraviolet configuration did not load.");
-    await navigator.serviceWorker.register("/uv/sw.js");
+    await navigator.serviceWorker.register("/uv/sw.js", { updateViaCache: "none" });
     await navigator.serviceWorker.ready;
     if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js");
     const transport = "/epoxy/index.mjs";
