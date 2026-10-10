@@ -863,7 +863,7 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     // the visitor's network/device policies will apply normally.
     try {
       const directTarget = new URL(target);
-      const host = directTarget.hostname.toLowerCase().replace(/\\.$/, "");
+      const host = directTarget.hostname.toLowerCase().replace(/\.$/, "");
       const isYouTube = host === "youtube.com" || host.endsWith(".youtube.com") ||
         host === "youtu.be" || host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com");
       if (directTarget.protocol === "https:" && isYouTube) {
