@@ -865,6 +865,12 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
 
   const source = new URL(sourceUrl);
   const hostLabel = escapeAttribute(source.hostname);
+
+  // Restore the common GET form workflow in a controlled way. Form actions are
+  // kept in data attributes above, and submissions are redirected to /browse
+  // with the original destination plus serialized text fields.
+  const sourceLiteral = JSON.stringify(sourceUrl).replace(/</g, "\\u003c");
+  $("head").append('<script>(function(){var base=' + sourceLiteral + ';document.addEventListener("submit",function(event){var form=event.target;if(!form||form.tagName!=="FORM")return;var method=String(form.getAttribute("method")||"get").toLowerCase();if(method!=="get")return;var submitter=event.submitter||null;var action=(submitter&&submitter.getAttribute("data-stm-formaction"))||form.getAttribute("data-stm-action")||base;var target;try{target=new URL(action,base)}catch(_){return}if(target.protocol!=="https:"&&target.protocol!=="http:")return;var data;try{data=submitter?new FormData(form,submitter):new FormData(form)}catch(_){data=new FormData(form);if(submitter&&submitter.name&&!data.has(submitter.name))data.append(submitter.name,submitter.value||"")}data.forEach(function(value,key){if(typeof value==="string")target.searchParams.append(key,value)});event.preventDefault();event.stopImmediatePropagation();window.location.assign("/browse?url="+encodeURIComponent(target.toString()))},true)})();</script>');
   // Google Search's native form must be routed back through the proxy. Since
   // generic form actions are intentionally stripped, intercept Google search
   // submits and construct a fresh Google URL instead of submitting to /browse
