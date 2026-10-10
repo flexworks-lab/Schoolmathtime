@@ -39,7 +39,7 @@ jobs:
           test "$ready" -eq 1
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'wisp-v2-stream-fix-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'wisp-mux-reset-1'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'did not activate within 15 seconds'
           ! grep -q 'await navigator.serviceWorker.ready' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
@@ -50,6 +50,8 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/baremux/index.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/epoxy/index.mjs > /dev/null
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'const transport = "/epoxy/index.mjs?build=wisp-mux-reset-1"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'await connection.setTransport(transport'
           grep -q 'wispServer.options.wisp_version = 2' src/server.js
           grep -q 'wispServer.options.stream_limit_total = 128' src/server.js
           grep -q 'wispServer.options.stream_limit_per_host = -1' src/server.js
