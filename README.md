@@ -18,7 +18,7 @@ Entering a search phrase opens `https://www.google.com/search?q=...` through the
 
 ## Video, JavaScript, and security
 
-YouTube URLs are opened directly on YouTube rather than fetched by this server, because the upstream site may rate-limit server-side requests. This avoids returning a server-generated HTTP 429 for the YouTube page, but the visitor's network and device rules still apply. This direct-navigation path does not bypass a school or network block.
+YouTube URLs are kept inside the Schoolmathtime proxy and use the normal proxied page path rather than an external redirect or a custom embed. YouTube may still rate-limit server-side requests with HTTP 429, and the proxy cannot guarantee the native YouTube application will work fully through a proxy.
 
 Supported video embeds (including Vimeo, Twitch, Dailymotion, Spotify, SoundCloud, Loom, TikTok, and Bilibili) can run in their own frames. HTML5 audio/video sources use a streaming route with byte-range support. Playback still depends on provider rules, CORS, browser APIs, licensing, age restrictions, and whether the uploader permits embedding. No generic proxy can make every site behave exactly as it does on its native origin.
 
