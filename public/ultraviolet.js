@@ -58,7 +58,7 @@
     // the underlying Wisp multiplexor has died, which leaves retries stuck on
     // MuxTaskEnded. Set the transport before the service worker becomes ready,
     // as recommended by BareMux, so its first proxied request has a live client.
-    if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js");
+    if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js?v=bare-mux-2-1-9");
     const transport = "/epoxy/index.mjs?build=wisp-mux-reset-1";
     const wispUrl = "wss://" + location.host + "/wisp/";
     await connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]);
