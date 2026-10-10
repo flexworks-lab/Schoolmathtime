@@ -868,13 +868,17 @@ app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async 
     endpoint.searchParams.set("safeSearch", "moderate");
     endpoint.searchParams.set("regionCode", "US");
     endpoint.searchParams.set("q", query);
-    endpoint.searchParams.set("key", apiKey);
 
+    // Keep the server-side API key out of the request URL and its access logs.
+    // Google supports sending API keys in the x-goog-api-key header.
     // Each uncached search request uses YouTube Data API quota.
     youtubeSearchApiCalls += 1;
     const upstream = await fetch(endpoint, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        "x-goog-api-key": apiKey
+      },
       signal: AbortSignal.timeout(12_000)
     });
     const payload = await upstream.json().catch(() => ({}));
