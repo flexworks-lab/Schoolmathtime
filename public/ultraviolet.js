@@ -6,6 +6,7 @@
   const address = byId("uv-address");
   const status = byId("uv-status");
   const frame = byId("uv-frame");
+  const classicFrame = byId("classic-frame");
   const welcome = byId("uv-welcome");
   const error = byId("uv-error");
   const copyError = byId("uv-copy-error");
@@ -14,6 +15,9 @@
   let connection = null;
   let lastTarget = "";
   let hasLoaded = false;
+  let activeEngine = "";
+  let raceSerial = 0;
+  let raceAttempt = null;
 
   function setStatus(message) { status.textContent = message; }
   function setError(message) {
@@ -21,7 +25,7 @@
     error.hidden = false;
     copyError.hidden = false;
     error.focus();
-    setStatus("Ultraviolet could not open this page. The error text is selectable.");
+    setStatus("Neither browser engine could open this page. The error text is selectable.");
   }
 
   function makeTarget(value) {
@@ -90,45 +94,179 @@
         timer = window.setTimeout(() => {
           cleanup();
           reject(new Error("Ultraviolet's service worker did not activate within 15 seconds. The worker may be blocked or its script/config may be stale."));
-        }, 15000);
-        worker.addEventListener("statechange", onStateChange);
-        onStateChange();
-      });
+    function candidateFailure(candidateFrame) {
+    try {
+      const doc = candidateFrame.contentDocument;
+      if (!doc || !doc.documentElement) return "The browser returned an empty document.";
+      const title = String(doc.title || "").toLowerCase();
+      const text = String(doc.body?.innerText || doc.body?.textContent || "").trim();
+      if (/page unavailable.*schoolmathtime/i.test(title) ||
+          (/that page could not be opened\./i.test(text) && /schoolmathtime/i.test(text))) {
+        return text.slice(0, 700) || "The proxy returned its page-unavailable screen.";
+      }
+      return "";
+    } catch {
+      // Some sites lock down their document even after the proxy route loads.
+      // Treat that as a potentially valid page instead of incorrectly rejecting it.
+      return "";
     }
   }
 
-  async function openTarget(value, pushState = true) {
+  function finishIfBothFailed(attempt) {
+    if (raceAttempt !== attempt || attempt.finished ||
+        attempt.pending.uv || attempt.pending.classic) return;
+    attempt.finished = true;
+    raceAttempt = null;
+    if (attempt.timer) window.clearTimeout(attempt.timer);
+    activeEngine = "";
+    document.body.classList.remove("classic-active");
+    frame.classList.add("race-hidden");
+    classicFrame.classList.add("race-hidden");
+    frame.style.display = "block";
+    classicFrame.style.display = "block";
+    welcome.style.display = "flex";
+    const details = ["Ultraviolet: " + (attempt.failures.uv || "no usable response"),
+      "Classic: " + (attempt.failures.classic || "no usable response")].join("\n");
+    setError("Both browsing routes failed for " + new URL(attempt.target).hostname + ".\n" + details +
+      "\nTry reloading, or use another website address.");
+  }
+
+  function failCandidate(attempt, engine, reason) {
+    if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
+    attempt.pending[engine] = false;
+    attempt.failures[engine] = String(reason || "The route failed to load.").slice(0, 900);
+    finishIfBothFailed(attempt);
+  }
+
+  function chooseWinner(attempt, engine) {
+    if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
+    const winner = engine === "uv" ? frame : classicFrame;
+    const loser = engine === "uv" ? classicFrame : frame;
+    const failure = candidateFailure(winner);
+    if (failure) {
+      failCandidate(attempt, engine, failure);
+      return;
+    }
+
+    attempt.finished = true;
+    attempt.pending[engine] = false;
+    attempt.pending[engine === "uv" ? "classic" : "uv"] = false;
+    if (attempt.timer) window.clearTimeout(attempt.timer);
+    raceAttempt = null;
+    activeEngine = engine;
+    hasLoaded = true;
+    document.body.classList.toggle("classic-active", engine === "classic");
+    winner.style.display = "block";
+    winner.classList.remove("race-hidden");
+    loser.classList.add("race-hidden");
+    loser.dataset.expectedSrc = "";
+    loser.src = "about:blank";
+    setStatus("Opened " + new URL(attempt.target).hostname + " with " +
+      (engine === "uv" ? "Ultraviolet" : "the classic proxy") + " (first usable route).");
+    refreshBookmarkState();
+  }
+
+  function handleCandidateLoad(engine) {
+    const attempt = raceAttempt;
+    const candidate = engine === "uv" ? frame : classicFrame;
+    if (!attempt || attempt.finished || !attempt.pending[engine]) return;
+    const expected = candidate.dataset.expectedSrc || "";
+    if (!expected || candidate.src === "about:blank" || candidate.src !== expected) return;
+    chooseWinner(attempt, engine);
+  }
+
+  function openTarget(value, pushState = true) {
     let target;
     try { target = makeTarget(value); }
     catch (err) { setError(err.message || err); return; }
     error.hidden = true;
     copyError.hidden = true;
-    if (!hasLoaded) setStatus("Preparing secure proxy connection…");
-    try {
-      await ensureTransport();
-      if (pushState) {
-        const next = "/ultraviolet.html?url=" + encodeURIComponent(target);
-        history.pushState({ target }, "", next);
-      }
-      lastTarget = target;
-      address.value = target;
-      frame.style.display = "block";
-      welcome.style.display = "none";
-      setStatus("Loading " + new URL(target).hostname + " through Ultraviolet…");
-      frame.src = __uv$config.prefix + __uv$config.encodeUrl(target);
-      refreshBookmarkState();
-    } catch (err) {
-      setError(err && err.stack ? err.stack : err);
+
+    const attempt = {
+      id: ++raceSerial,
+      target,
+      pending: { uv: true, classic: true },
+      failures: { uv: "", classic: "" },
+      expected: { uv: "", classic: "" },
+      timer: null,
+      finished: false
+    };
+    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
+    raceAttempt = attempt;
+    activeEngine = "";
+    hasLoaded = false;
+    lastTarget = target;
+    address.value = target;
+    document.body.classList.remove("classic-active");
+    welcome.style.display = "none";
+    frame.style.display = "block";
+    classicFrame.style.display = "block";
+    frame.classList.add("race-hidden");
+    classicFrame.classList.add("race-hidden");
+    frame.dataset.expectedSrc = "";
+    classicFrame.dataset.expectedSrc = "";
+    frame.src = "about:blank";
+    classicFrame.src = "about:blank";
+    setStatus("Trying both browser routes for " + new URL(target).hostname + "…");
+
+    if (pushState) {
+      const next = "/ultraviolet.html?url=" + encodeURIComponent(target);
+      history.pushState({ target }, "", next);
     }
+
+    // Begin the classic request immediately while Ultraviolet prepares its
+    // service worker and Wisp connection. The first route with a usable page wins.
+    const classicPath = "/browse?url=" + encodeURIComponent(target);
+    attempt.expected.classic = new URL(classicPath, location.href).href;
+    classicFrame.dataset.expectedSrc = attempt.expected.classic;
+    classicFrame.src = classicPath;
+
+    attempt.timer = window.setTimeout(() => {
+      if (raceAttempt !== attempt || attempt.finished) return;
+      for (const engine of ["uv", "classic"]) {
+        if (attempt.pending[engine]) failCandidate(attempt, engine, "Timed out while opening the website.");
+      }
+    }, 30000);
+
+    void (async () => {
+      try {
+        await ensureTransport();
+        if (raceAttempt !== attempt || attempt.finished || !attempt.pending.uv) return;
+        const uvPath = __uv$config.prefix + __uv$config.encodeUrl(target);
+        attempt.expected.uv = new URL(uvPath, location.href).href;
+        frame.dataset.expectedSrc = attempt.expected.uv;
+        frame.src = uvPath;
+      } catch (err) {
+        failCandidate(attempt, "uv", err && err.stack ? err.stack : err);
+      }
+    })();
+    refreshBookmarkState();
   }
 
   function currentTarget() {
+    if (activeEngine === "classic") {
+      try {
+        const childUrl = new URL(classicFrame.contentWindow.location.href);
+        const value = childUrl.pathname === "/browse" ? childUrl.searchParams.get("url") : "";
+        if (value) {
+          const target = new URL(value);
+          if (target.protocol === "https:") return target.toString();
+        }
+      } catch {}
+    }
     try {
       const childUrl = new URL(frame.contentWindow.location.href);
-      if (childUrl.pathname.startsWith(__uv$config.prefix)) {
+      if (typeof __uv$config !== "undefined" && childUrl.pathname.startsWith(__uv$config.prefix)) {
         const encoded = childUrl.pathname.slice(__uv$config.prefix.length);
         const decoded = __uv$config.decodeUrl(encoded);
         const target = new URL(decoded);
+        if (target.protocol === "https:") return target.toString();
+      }
+    } catch {}
+    return lastTarget;
+  }
+
+oded);
         if (target.protocol === "https:") return target.toString();
       }
     } catch {}
