@@ -35,10 +35,14 @@ const UPSTREAM_MAX_COOLDOWN_MS = 15 * 60_000;
 const YOUTUBE_REQUEST_GAP_MS = 350;
 const YOUTUBE_MAX_CONCURRENT_REQUESTS = 2;
 const YOUTUBE_MAX_QUEUED_REQUESTS = 48;
+const YOUTUBE_SEARCH_CACHE_TTL_MS = 10 * 60_000;
+const YOUTUBE_SEARCH_CACHE_MAX_ENTRIES = 100;
+const YOUTUBE_API_ENDPOINT = "https://www.googleapis.com/youtube/v3/search";
 const dnsCache = new Map();
 const responseCache = new Map();
 const upstreamCooldowns = new Map();
 const upstreamQueues = new Map();
+const youtubeSearchCache = new Map();
 let responseCacheBytes = 0;
 
 function parseAllowedHosts(value) {
@@ -79,6 +83,13 @@ const fetchLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: "Rate limit reached. Please wait a moment."
+});
+const youtubeSearchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 12,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many YouTube searches. Please wait a minute and try again." }
 });
 
 function allowPublicBrowsing(_req, _res, next) {
@@ -809,6 +820,103 @@ function escapeAttribute(value) {
 app.use(express.static(path.join(__dirname, "..", "public"), { index: "index.html", maxAge: process.env.NODE_ENV === "production" ? "1h" : 0 }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.get("/api/youtube/search", allowPublicBrowsing, youtubeSearchLimiter, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const query = String(req.query.q || "").trim().replace(/\\s+/g, " ").slice(0, 120);
+  if (!query) return res.status(400).json({ error: "Enter something to search for." });
+  if (query.length < 2) return res.status(400).json({ error: "Enter at least two characters." });
+
+  const apiKey = String(process.env.YOUTUBE_API_KEY || "").trim();
+  if (!apiKey) {
+    return res.status(503).json({
+      error: "YouTube API is not configured yet. Add YOUTUBE_API_KEY to the Schoolmathtime server environment."
+    });
+  }
+
+  const cacheKey = query.toLocaleLowerCase("en-US");
+  const cached = youtubeSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    youtubeSearchCache.delete(cacheKey);
+    youtubeSearchCache.set(cacheKey, cached);
+    return res.json({ query, items: cached.items, cached: true });
+  }
+  if (cached) youtubeSearchCache.delete(cacheKey);
+
+  try {
+    const endpoint = new URL(YOUTUBE_API_ENDPOINT);
+    endpoint.searchParams.set("part", "snippet");
+    endpoint.searchParams.set("type", "video");
+    endpoint.searchParams.set("maxResults", "12");
+    endpoint.searchParams.set("safeSearch", "moderate");
+    endpoint.searchParams.set("regionCode", "US");
+    endpoint.searchParams.set("q", query);
+    endpoint.searchParams.set("key", apiKey);
+
+    const upstream = await fetch(endpoint, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(12_000)
+    });
+    const payload = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      const reason = String(payload?.error?.errors?.[0]?.reason || payload?.error?.status || "");
+      if (["quotaExceeded", "dailyLimitExceeded", "userRateLimitExceeded"].includes(reason)) {
+        return res.status(429).json({
+          error: "YouTube API search quota has been reached. Searches will work again when Google's quota resets."
+        });
+      }
+      if (upstream.status === 400 || upstream.status === 401 || upstream.status === 403) {
+        console.warn("YouTube Data API configuration rejected the search:", upstream.status, reason || "unknown reason");
+        return res.status(503).json({
+          error: "YouTube API rejected the server key. Check that YouTube Data API v3 is enabled and the key is configured correctly in Render."
+        });
+      }
+      console.warn("YouTube Data API request failed:", upstream.status, reason || "unknown reason");
+      return res.status(502).json({ error: "YouTube search is temporarily unavailable. Try again later." });
+    }
+
+    const items = (Array.isArray(payload.items) ? payload.items : []).flatMap((item) => {
+      const id = String(item?.id?.videoId || "");
+      if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) return [];
+      const snippet = item.snippet || {};
+      const rawThumbnail = snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || "";
+      let thumbnail = "";
+      try {
+        const parsedThumbnail = new URL(rawThumbnail);
+        const thumbHost = parsedThumbnail.hostname.toLowerCase();
+        if (parsedThumbnail.protocol === "https:" &&
+            (thumbHost === "ytimg.com" || thumbHost.endsWith(".ytimg.com") ||
+             thumbHost === "ggpht.com" || thumbHost.endsWith(".ggpht.com"))) {
+          thumbnail = parsedThumbnail.toString();
+        }
+      } catch {}
+      return [{
+        id,
+        title: String(snippet.title || "Untitled video").slice(0, 300),
+        description: String(snippet.description || "").slice(0, 700),
+        channelTitle: String(snippet.channelTitle || "").slice(0, 160),
+        publishedAt: String(snippet.publishedAt || ""),
+        thumbnail,
+        // Keep the navigation on Schoolmathtime; don't send a new tab directly
+        // to YouTube and don't put an API key in any browser-visible URL.
+        watchUrl: "/browse?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id)
+      }];
+    });
+
+    youtubeSearchCache.set(cacheKey, { items, expiresAt: Date.now() + YOUTUBE_SEARCH_CACHE_TTL_MS });
+    while (youtubeSearchCache.size > YOUTUBE_SEARCH_CACHE_MAX_ENTRIES) {
+      youtubeSearchCache.delete(youtubeSearchCache.keys().next().value);
+    }
+    return res.json({ query, items, cached: false });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      return res.status(504).json({ error: "YouTube search timed out. Please try again." });
+    }
+    console.warn("YouTube Data API request failed:", error?.message || "unknown error");
+    return res.status(502).json({ error: "Unable to contact the YouTube Data API right now." });
+  }
+});
 
 app.get("/api/session", (_req, res) => {
   res.set("Cache-Control", "no-store");
