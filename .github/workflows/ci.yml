@@ -17,3 +17,24 @@ jobs:
           cache: npm
       - run: npm install
       - run: npm run check
+      - name: Smoke-test Ultraviolet startup
+        run: |
+          set -eu
+          ALLOWED_HOSTS='*' PORT=3917 npm start > /tmp/schoolmathtime-startup.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 20); do
+            if grep -q "Ultraviolet ready: true" /tmp/schoolmathtime-startup.log; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat /tmp/schoolmathtime-startup.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/schoolmathtime-startup.log
+          test "$ready" -eq 1
+          curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
