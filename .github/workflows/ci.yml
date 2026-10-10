@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm install
+      - run: npm ci
       - run: npm run check
       - name: Smoke-test Ultraviolet startup
         run: |
