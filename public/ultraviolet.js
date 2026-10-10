@@ -12,6 +12,7 @@
   const error = byId("uv-error");
   const copyError = byId("uv-copy-error");
   const bookmark = byId("uv-bookmark");
+  const youtubeLogin = byId("uv-youtube-login");
   const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
   let connection = null;
   let lastTarget = "";
@@ -201,6 +202,20 @@
     let target;
     try { target = makeTarget(value); }
     catch (err) { setError(err.message || err); return; }
+
+    // YouTube is substantially more JavaScript-heavy than the classic fetch
+    // proxy. Prefer Ultraviolet for YouTube and Google sign-in routes so the
+    // native page layout/session flow runs inside this browser frame.
+    if (isYouTubeOrGoogleSignin(target)) {
+      error.hidden = true;
+      copyError.hidden = true;
+      if (pushState) {
+        history.pushState({ target }, "", "/ultraviolet.html?url=" + encodeURIComponent(target));
+      }
+      openSingleEngine("uv", target);
+      return;
+    }
+
     error.hidden = true;
     copyError.hidden = true;
 
@@ -343,6 +358,42 @@
     })();
   }
 
+  function isYouTubeOrGoogleSignin(value) {
+    try {
+      const host = new URL(value).hostname.toLowerCase().replace(/\\.$/, "");
+      return host === "youtube.com" || host.endsWith(".youtube.com") ||
+        host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com") ||
+        host === "accounts.google.com" || host === "myaccount.google.com" ||
+        host === "consent.google.com";
+    } catch {
+      return false;
+    }
+  }
+
+  function setUltravioletLoadedStatus() {
+    const target = currentTarget();
+    let host = "";
+    try { host = new URL(target).hostname.toLowerCase(); } catch {}
+    if (host === "accounts.google.com" || host === "myaccount.google.com" || host === "consent.google.com") {
+      let pageText = "";
+      try {
+        pageText = String(frame.contentDocument?.body?.innerText ||
+          frame.contentDocument?.body?.textContent || "").slice(0, 5000);
+      } catch {}
+      if (/disallowed_useragent|this browser or app may not be secure|couldn.t sign you in|sign in with a supported browser|unsupported browser/i.test(pageText)) {
+        setStatus("Google blocked sign-in in this proxied browser. Google requires a supported sign-in browser; Ultraviolet cannot override that restriction.");
+      } else {
+        setStatus("Google sign-in is open inside Ultraviolet. It should return to YouTube in this same browser after sign-in.");
+      }
+      return;
+    }
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      setStatus("YouTube is running in Ultraviolet. The page stays inside Schoolmathtime.");
+      return;
+    }
+    setStatus("Page loaded through Ultraviolet. Some websites may still restrict scripts or media.");
+  }
+
   function readBookmarks() {
     try {
       const items = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || "[]");
@@ -423,12 +474,22 @@
     }
     if (activeEngine === "uv") {
       hasLoaded = true;
-      setStatus("Page loaded through Ultraviolet. Some websites may still restrict scripts or media.");
+      setUltravioletLoadedStatus();
       refreshBookmarkState();
     }
   });
   classicFrame.addEventListener("load", () => {
     handleCandidateLoad("classic");
+  });
+  youtubeLogin?.addEventListener("click", () => {
+    // Start Google's official YouTube sign-in page within the UV iframe. The
+    // continue parameter returns to YouTube through the same proxied frame.
+    const login = new URL("https://accounts.google.com/ServiceLogin");
+    login.searchParams.set("service", "youtube");
+    login.searchParams.set("continue", "https://www.youtube.com/");
+    login.searchParams.set("hl", "en");
+    openSingleEngine("uv", login.toString());
+    setStatus("Opening Google sign-in inside Ultraviolet. Google may restrict sign-in in proxied browsers.");
   });
   engineSwitch.addEventListener("click", () => {
     const target = currentTarget() || lastTarget || address.value.trim();
