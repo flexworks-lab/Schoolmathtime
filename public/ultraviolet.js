@@ -19,6 +19,7 @@
   let activeEngine = "";
   let raceSerial = 0;
   let raceAttempt = null;
+  let transportReady = null;
 
   function setStatus(message) { status.textContent = message; }
   function setError(message) {
@@ -47,7 +48,7 @@
     return "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(input);
   }
 
-  async function ensureTransport() {
+  async function initializeTransport() {
     if (!navigator.serviceWorker) throw new Error("This browser does not support service workers. Open Schoolmathtime over HTTPS in a compatible browser.");
     if (typeof BareMux === "undefined") throw new Error("Ultraviolet transport files did not load.");
     if (typeof __uv$config === "undefined") throw new Error("Ultraviolet configuration did not load.");
@@ -102,6 +103,16 @@
     }
   }
 
+  function ensureTransport() {
+    if (!transportReady) {
+      transportReady = initializeTransport().catch((error) => {
+        transportReady = null;
+        throw error;
+      });
+    }
+    return transportReady;
+  }
+
   function candidateFailure(candidateFrame) {
     try {
       const doc = candidateFrame.contentDocument;
@@ -142,6 +153,7 @@
 
   function failCandidate(attempt, engine, reason) {
     if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
+    if (engine === "uv") transportReady = null;
     attempt.pending[engine] = false;
     attempt.failures[engine] = String(reason || "The route failed to load.").slice(0, 900);
     finishIfBothFailed(attempt);
@@ -437,5 +449,9 @@
   if (initial) {
     address.value = initial;
     void openTarget(initial, false);
+  } else {
+    // Warm the transport while the user is on the browser's start page so
+    // the next typed navigation does not have to initialize it from scratch.
+    void ensureTransport().catch(() => {});
   }
 })();
