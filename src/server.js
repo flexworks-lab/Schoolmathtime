@@ -5,6 +5,7 @@ const { createServer } = require("node:http");
 const dns = require("node:dns").promises;
 const net = require("node:net");
 const https = require("node:https");
+const zlib = require("node:zlib");
 const upstreamAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60_000 });
 const express = require("express");
 const helmet = require("helmet");
@@ -47,6 +48,11 @@ const YOUTUBE_SEARCH_DAILY_CAP = Number.isSafeInteger(requestedYouTubeDailyCap)
   : 80;
 const dnsCache = new Map();
 const responseCache = new Map();
+const rewrittenPageCache = new Map();
+let rewrittenPageCacheBytes = 0;
+const REWRITTEN_PAGE_CACHE_MAX_ENTRIES = 64;
+const REWRITTEN_PAGE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const REWRITTEN_PAGE_CACHE_TTL_MS = 2 * 60_000;
 const upstreamCooldowns = new Map();
 const upstreamQueues = new Map();
 const youtubeSearchCache = new Map();
@@ -407,8 +413,10 @@ function readResponseCache(key, allowStale = false) {
 
 function writeResponseCache(key, result) {
   const bodySize = result.body?.length || 0;
-  const isHtml = result.contentType.includes("text/html") || result.contentType.includes("application/xhtml+xml");
-  const maxItemBytes = isHtml ? MAX_PAGE_BYTES : 2 * 1024 * 1024;
+  const contentType = String(result.contentType || "").toLowerCase();
+  const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml+xml");
+  const isLargeStaticAsset = /(?:javascript|ecmascript|text\/css|application\/wasm|font\/|woff|opentype)/i.test(contentType);
+  const maxItemBytes = isHtml ? MAX_PAGE_BYTES : isLargeStaticAsset ? 16 * 1024 * 1024 : 2 * 1024 * 1024;
   if (!bodySize || bodySize > maxItemBytes || bodySize > RESPONSE_CACHE_MAX_BYTES) return;
 
   const existing = responseCache.get(key);
@@ -416,7 +424,7 @@ function writeResponseCache(key, result) {
     responseCacheBytes -= existing.body.length;
     responseCache.delete(key);
   }
-  const ttl = isHtml ? 2 * 60_000 : 30 * 60_000;
+  const ttl = isHtml ? 2 * 60_000 : isLargeStaticAsset ? 60 * 60_000 : 30 * 60_000;
   const entry = {
     target: result.target.toString(),
     contentType: result.contentType,
@@ -434,6 +442,43 @@ function writeResponseCache(key, result) {
     const oldest = responseCache.get(oldestKey);
     responseCache.delete(oldestKey);
     responseCacheBytes -= oldest.body.length;
+  }
+}
+
+function readRewrittenPageCache(key) {
+  const entry = rewrittenPageCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    rewrittenPageCache.delete(key);
+    rewrittenPageCacheBytes -= entry.size;
+    return null;
+  }
+  rewrittenPageCache.delete(key);
+  rewrittenPageCache.set(key, entry);
+  return entry.html;
+}
+
+function writeRewrittenPageCache(key, html) {
+  const size = Buffer.byteLength(html, "utf8");
+  if (!size || size > MAX_PAGE_BYTES || size > REWRITTEN_PAGE_CACHE_MAX_BYTES) return;
+  const existing = rewrittenPageCache.get(key);
+  if (existing) {
+    rewrittenPageCacheBytes -= existing.size;
+    rewrittenPageCache.delete(key);
+  }
+  rewrittenPageCache.set(key, {
+    html,
+    size,
+    expiresAt: Date.now() + REWRITTEN_PAGE_CACHE_TTL_MS
+  });
+  rewrittenPageCacheBytes += size;
+  while (rewrittenPageCache.size > REWRITTEN_PAGE_CACHE_MAX_ENTRIES ||
+         rewrittenPageCacheBytes > REWRITTEN_PAGE_CACHE_MAX_BYTES) {
+    const oldestKey = rewrittenPageCache.keys().next().value;
+    const oldest = rewrittenPageCache.get(oldestKey);
+    if (!oldest) break;
+    rewrittenPageCache.delete(oldestKey);
+    rewrittenPageCacheBytes -= oldest.size;
   }
 }
 
@@ -461,6 +506,7 @@ function requestPinned(target, addresses, maxBytes) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, br, deflate",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/css,*/*;q=0.8"
       },
       lookup: (_hostname, options, callback) => {
@@ -483,9 +529,35 @@ function requestPinned(target, addresses, maxBytes) {
         finish(new Error("The remote response is larger than the configured safety limit."));
         return;
       }
-      collectLimited(response, maxBytes).then((body) => {
+      const contentEncoding = String(response.headers["content-encoding"] || "").trim().toLowerCase();
+      let bodyStream = response;
+      try {
+        // Ask origins to compress text and executable assets, then enforce the
+        // response limit on the decoded bytes so a compressed payload cannot
+        // expand beyond the same memory/safety budget.
+        if (contentEncoding === "gzip" || contentEncoding === "x-gzip") {
+          bodyStream = response.pipe(zlib.createGunzip());
+        } else if (contentEncoding === "br") {
+          bodyStream = response.pipe(zlib.createBrotliDecompress());
+        } else if (contentEncoding === "deflate") {
+          bodyStream = response.pipe(zlib.createInflate());
+        } else if (contentEncoding && contentEncoding !== "identity") {
+          response.destroy();
+          finish(new Error("The remote website used an unsupported content encoding."));
+          return;
+        }
+      } catch (error) {
+        response.destroy();
+        finish(error);
+        return;
+      }
+      response.once("error", finish);
+      collectLimited(bodyStream, maxBytes).then((body) => {
         finish(null, { status, headers: response.headers, body });
-      }).catch(finish);
+      }).catch((error) => {
+        response.destroy();
+        finish(error);
+      });
     });
 
     const timeout = setTimeout(() => {
@@ -1141,7 +1213,14 @@ app.get("/browse", allowPublicBrowsing, fetchLimiter, async (req, res) => {
     if (!result.contentType.includes("text/html") && !result.contentType.includes("application/xhtml+xml")) {
       return res.status(415).send(errorDocument("That resource is not an HTML page.", "Try opening a page URL instead."));
     }
-    html = proxyDocument(result.body.toString("utf8"), result.target.toString(), "");
+    // The upstream payload cache avoids network waits; this second cache
+    // avoids reparsing and rewriting large DOMs on repeated visits.
+    const rewrittenCacheKey = result.target.toString();
+    html = readRewrittenPageCache(rewrittenCacheKey);
+    if (!html) {
+      html = proxyDocument(result.body.toString("utf8"), result.target.toString(), "");
+      writeRewrittenPageCache(rewrittenCacheKey, html);
+    }
     res.set({
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
