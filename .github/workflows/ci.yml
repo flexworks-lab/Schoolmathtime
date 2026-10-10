@@ -39,7 +39,7 @@ jobs:
           test "$ready" -eq 1
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"ultraviolet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'smart-race-1'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'smart-race-2'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="classic-frame"'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'did not activate within 15 seconds'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'Trying both browser routes'
