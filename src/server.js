@@ -842,7 +842,7 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
     </div>
     <div id="stm-browser-notice" class="stm-browser-notice" role="status" aria-live="polite" hidden></div>
   </div>`;
-  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=layout-preserve-2"><script src="/proxy-chrome.js?v=no-tabs-media-2" defer></script>');
+  $("head").append('<link rel="stylesheet" href="/browser-chrome.css?v=single-toolbar-2"><link rel="stylesheet" href="/proxy-fit.css?v=layout-preserve-2"><script src="/proxy-chrome.js?v=ultraviolet-engine-1" defer></script>');
   $("body").prepend(toolbar);
   if (!$("body").length) $("html").append("<body>" + toolbar + "</body>");
   // Only apply the YouTube masthead offset when the upstream page actually
@@ -864,7 +864,15 @@ function escapeAttribute(value) {
   return String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-app.use(express.static(path.join(__dirname, "..", "public"), { index: "index.html", maxAge: process.env.NODE_ENV === "production" ? "1h" : 0 }));
+app.use(express.static(path.join(__dirname, "..", "public"), {
+  index: "index.html",
+  maxAge: process.env.NODE_ENV === "production" ? "1h" : 0,
+  setHeaders(res, filePath) {
+    // Keep HTML shells fresh so navigation/cache-buster fixes reach browsers
+    // promptly; static CSS, JavaScript and media can still use their asset TTL.
+    if (/\.html?$/i.test(filePath)) res.setHeader("Cache-Control", "no-cache");
+  }
+}));
 
 app.get("/health", (_req, res) => res.json({ ok: true, ultraviolet: ultravioletReady }));
 
