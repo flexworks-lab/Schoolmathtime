@@ -18,7 +18,9 @@ Entering a search phrase opens `https://www.google.com/search?q=...` through the
 
 ## Video, JavaScript, and security
 
-Direct YouTube watch/Shorts URLs open in a responsive YouTube player below the toolbar. Supported video embeds (including YouTube, Vimeo, Twitch, Dailymotion, Spotify, SoundCloud, Loom, TikTok, and Bilibili) can run in their own frames. HTML5 audio/video sources use a streaming route with byte-range support. Playback still depends on provider rules, CORS, browser APIs, licensing, age restrictions, and whether the uploader permits embedding. No generic proxy can make every site behave exactly as it does on its native origin.
+YouTube URLs are opened directly on YouTube rather than fetched by this server, because the upstream site may rate-limit server-side requests. This avoids returning a server-generated HTTP 429 for the YouTube page, but the visitor's network and device rules still apply. This direct-navigation path does not bypass a school or network block.
+
+Supported video embeds (including Vimeo, Twitch, Dailymotion, Spotify, SoundCloud, Loom, TikTok, and Bilibili) can run in their own frames. HTML5 audio/video sources use a streaming route with byte-range support. Playback still depends on provider rules, CORS, browser APIs, licensing, age restrictions, and whether the uploader permits embedding. No generic proxy can make every site behave exactly as it does on its native origin.
 
 Some site JavaScript, forms, service workers, protected playback, and origin-locked APIs may not work correctly. Since the passkey is removed, the service is public; set `ALLOWED_HOSTS` to a short trusted domain list if it should not browse the entire public web. Keep HTTPS/IP validation and rate limiting enabled. Do not use the proxy for sensitive accounts or private data; third-party page scripts execute in this proxy session. The proxy does not bypass a destination site's access controls.
 
