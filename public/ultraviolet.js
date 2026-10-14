@@ -7,7 +7,6 @@
   const status = byId("uv-status");
   const frame = byId("uv-frame");
   const classicFrame = byId("classic-frame");
-  const engineSwitch = byId("uv-engine-switch");
   const library = byId("uv-library");
   const bookmarkList = byId("uv-bookmark-list");
   const historyList = byId("uv-history-list");
@@ -17,7 +16,6 @@
   const copyError = byId("uv-copy-error");
   const bookmark = byId("uv-bookmark");
   const youtubeLogin = byId("uv-youtube-login");
-  const scramjetButton = byId("uv-scramjet");
   const stage = document.querySelector(".uv-stage");
   const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
   const HISTORY_KEY = "schoolmathtime.history";
@@ -26,7 +24,6 @@
   let hasLoaded = false;
   let activeEngine = "";
   let raceSerial = 0;
-  let raceAttempt = null;
   let transportReady = null;
   let preferredTransport = "epoxy";
   let routedAttempt = null;
@@ -203,76 +200,6 @@
     }
   }
 
-  function finishIfBothFailed(attempt) {
-    if (raceAttempt !== attempt || attempt.finished ||
-        attempt.pending.uv || attempt.pending.classic) return;
-    attempt.finished = true;
-    raceAttempt = null;
-    if (attempt.timer) window.clearTimeout(attempt.timer);
-    activeEngine = "";
-    engineSwitch.hidden = true;
-    document.body.classList.remove("classic-active");
-    frame.classList.add("race-hidden");
-    classicFrame.classList.add("race-hidden");
-    frame.style.display = "block";
-    classicFrame.style.display = "block";
-    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
-    welcome.style.display = "flex";
-    const details = ["Ultraviolet: " + (attempt.failures.uv || "no usable response"),
-      "Classic: " + (attempt.failures.classic || "no usable response")].join("\n");
-    setError("Both browsing routes failed for " + new URL(attempt.target).hostname + ".\n" + details +
-      "\nTry reloading, or use another website address.");
-  }
-
-  function failCandidate(attempt, engine, reason) {
-    if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
-    if (engine === "uv") {
-      transportReady = null;
-    }
-    attempt.pending[engine] = false;
-    attempt.failures[engine] = String(reason || "The route failed to load.").slice(0, 900);
-    finishIfBothFailed(attempt);
-  }
-
-  function chooseWinner(attempt, engine) {
-    if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
-    const winner = engine === "uv" ? frame : classicFrame;
-    const loser = engine === "uv" ? classicFrame : frame;
-    const failure = candidateFailure(winner);
-    if (failure) {
-      failCandidate(attempt, engine, failure);
-      return;
-    }
-
-    attempt.finished = true;
-    attempt.pending[engine] = false;
-    attempt.pending[engine === "uv" ? "classic" : "uv"] = false;
-    if (attempt.timer) window.clearTimeout(attempt.timer);
-    raceAttempt = null;
-    activeEngine = engine;
-    engineSwitch.hidden = engine !== "classic";
-    hasLoaded = true;
-    document.body.classList.toggle("classic-active", engine === "classic");
-    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
-    winner.style.display = "block";
-    winner.classList.remove("race-hidden");
-    loser.classList.add("race-hidden");
-    loser.dataset.expectedSrc = "";
-    loser.src = "about:blank";
-    setStatus("Opened " + new URL(attempt.target).hostname + " with " +
-      (engine === "uv" ? "Ultraviolet" : "the classic proxy") + " (first usable route).");
-    refreshBookmarkState();
-  }
-
-  function handleCandidateLoad(engine) {
-    const attempt = raceAttempt;
-    const candidate = engine === "uv" ? frame : classicFrame;
-    if (!attempt || attempt.finished || !attempt.pending[engine]) return;
-    const expected = candidate.dataset.expectedSrc || "";
-    if (!expected || candidate.src === "about:blank" || candidate.src !== expected) return;
-    chooseWinner(attempt, engine);
-  }
-
   function hostMatchesRoots(host, roots) {
     return roots.some((root) => host === root || host.endsWith("." + root));
   }
@@ -317,9 +244,7 @@
       return;
     }
 
-    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
     if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
-    raceAttempt = null;
     routedAttempt = null;
     singleEngineTimer = null;
     automaticFailureDetails = "";
@@ -386,9 +311,8 @@
 
     if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
     singleEngineTimer = null;
-    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
-    if (raceAttempt) raceAttempt.finished = true;
-    raceAttempt = null;
+    if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
+    singleEngineTimer = null;
     const switchId = ++raceSerial;
     const winner = engine === "uv" ? frame : classicFrame;
     const loser = engine === "uv" ? classicFrame : frame;
@@ -409,7 +333,6 @@
     error.hidden = true;
     copyError.hidden = true;
     welcome.style.display = "none";
-    engineSwitch.hidden = true;
     document.body.classList.toggle("classic-active", engine === "classic");
     if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
     winner.style.display = "block";
@@ -447,7 +370,6 @@
           handleRoutedFailure("uv", err && err.stack ? err.stack : err);
           return;
         }
-        engineSwitch.hidden = true;
         welcome.style.display = "flex";
         setError(err && err.stack ? err.stack : err);
       }
@@ -586,9 +508,9 @@
     try { target = makeTarget(value || currentTarget() || lastTarget || address.value); }
     catch (error) { setError(error.message || error); return; }
 
-    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
-    if (raceAttempt) raceAttempt.finished = true;
-    raceAttempt = null;
+    if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
+    singleEngineTimer = null;
+    routedAttempt = null;
     const switchId = ++raceSerial;
     activeEngine = "scramjet";
     lastTarget = target;
@@ -597,7 +519,6 @@
     error.hidden = true;
     copyError.hidden = true;
     welcome.style.display = "none";
-    engineSwitch.hidden = false;
     document.body.classList.remove("classic-active");
     frame.style.display = "none";
     classicFrame.style.display = "none";
@@ -645,7 +566,6 @@
     } catch (error) {
       if (switchId !== raceSerial) return;
       activeEngine = "";
-      engineSwitch.hidden = true;
       if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
       welcome.style.display = "flex";
       const priorFailures = automaticFailureDetails;
@@ -834,10 +754,6 @@
   });
   frame.addEventListener("load", () => {
     if (!frame.src || frame.src === "about:blank") return;
-    if (raceAttempt && raceAttempt.pending.uv) {
-      handleCandidateLoad("uv");
-      return;
-    }
     if (routedAttempt && routedAttempt.activeEngine === "uv") {
       handleRoutedLoad("uv", frame);
       return;
@@ -860,10 +776,6 @@
     }
   });
   classicFrame.addEventListener("load", () => {
-    if (raceAttempt && raceAttempt.pending.classic) {
-      handleCandidateLoad("classic");
-      return;
-    }
     if (routedAttempt && routedAttempt.activeEngine === "classic") {
       handleRoutedLoad("classic", classicFrame);
       return;
