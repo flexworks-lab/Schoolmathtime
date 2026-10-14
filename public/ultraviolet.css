@@ -50,3 +50,5 @@ body.classic-active .uv-stage{flex:1;min-height:0}
 .uv-library-entry-url{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px}
 .uv-library-empty{color:var(--muted);font-size:12px;padding:7px 2px}
 @media(max-width:700px){.uv-library>summary{min-height:31px;padding:0 7px}.uv-library-panel{right:-45px}}
+
+.uv-toolbar .uv-home{white-space:nowrap}
