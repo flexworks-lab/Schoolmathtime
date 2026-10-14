@@ -127,7 +127,7 @@ jobs:
           grep -q 'function preferredEngineFor(value)' public/ultraviolet.js
           grep -q 'function handleRoutedFailure(engine, reason)' public/ultraviolet.js
           grep -q 'transportFallbackTried' public/ultraviolet.js
-          ! curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-engine-switch"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-engine-mode"'
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"libcurl":true'
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"scramjet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
