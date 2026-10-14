@@ -952,9 +952,19 @@ async function streamRemoteMedia(input, req, res, redirectCount = 0) {
       "Accept": "video/*,audio/*,image/*,application/octet-stream;q=0.9,*/*;q=0.8",
       "Accept-Encoding": "identity"
     };
-    const range = String(req.headers.range || "");
-    if (/^bytes=\d*-\d*(?:,\d*-\d*)?$/.test(range)) headers.Range = range;
-    if (headers.Range && typeof req.headers["if-range"] === "string") {
+    // Forward standard byte ranges to the origin. Limit header size and range
+    // count so malformed client input cannot create oversized parsing work.
+    const rawRange = typeof req.headers.range === "string" ? req.headers.range.trim() : "";
+    const rangeParts = rawRange.startsWith("bytes=") ? rawRange.slice(6).split(",") : [];
+    const validRange = rawRange.length <= 256 &&
+      rangeParts.length >= 1 &&
+      rangeParts.length <= 8 &&
+      rangeParts.every((part) => /^(?:\d+-\d*|-\d+)$/.test(part.trim()));
+    if (validRange) {
+      headers.Range = "bytes=" + rangeParts.map((part) => part.trim()).join(",");
+    }
+    if (headers.Range && typeof req.headers["if-range"] === "string" &&
+        !/[\\r\\n]/.test(req.headers["if-range"])) {
       headers["If-Range"] = req.headers["if-range"].slice(0, 300);
     }
 
@@ -1034,7 +1044,10 @@ async function streamRemoteMedia(input, req, res, redirectCount = 0) {
       res.status(status);
       const contentType = String(upstream.headers["content-type"] || "application/octet-stream").split(";")[0];
       res.set("Content-Type", contentType);
-      res.set("Accept-Ranges", upstream.headers["accept-ranges"] || "bytes");
+      const upstreamAcceptRanges = String(upstream.headers["accept-ranges"] || "").trim().toLowerCase();
+      // A 206 response proves byte ranges worked even if the origin omitted the
+      // header. Otherwise, advertise range support only when the origin says so.
+      res.set("Accept-Ranges", status === 206 || upstreamAcceptRanges === "bytes" ? "bytes" : "none");
       for (const header of ["content-length", "content-range", "last-modified", "etag"]) {
         const value = upstream.headers[header];
         if (typeof value === "string" && !/[\r\n]/.test(value)) res.set(header, value);
