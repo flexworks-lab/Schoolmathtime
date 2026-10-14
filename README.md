@@ -4,7 +4,7 @@ A browser-style HTTPS proxy with a compact toolbar, responsive pages, and video 
 
 ## Features
 
-- Single-row browser toolbar, navigation buttons, address bar, home page, and bookmarks. The tab strip and passkey prompt are removed.
+- Single-row browser toolbar, navigation buttons, address bar, a local Library for bookmarks and recent history, and automatic browser-engine recovery.
 - The homepage sends new browsing sessions through the Ultraviolet service-worker engine, while the original `/browse` proxy remains available as a fallback.
 - Proxied websites receive responsive sizing rules so images and layout containers fit the browser width, while wide tables and code can scroll within their own areas.
 - `ALLOWED_HOSTS=*` mode accepts any public HTTPS hostname. Alternatively, set a comma-separated host allowlist.
@@ -48,15 +48,15 @@ The access token is exchanged and held only in server memory; it is not sent to 
 
 ## Ultraviolet browser engine
 
-The homepage address bar and YouTube search results use the Ultraviolet service-worker engine. The original server-side proxy at `/browse` remains available using the **Use classic browser** fallback. Ultraviolet assets are served from the installed npm package; the server uses `@mercuryworkshop/wisp-js` for its Wisp transport.
+The browser shell routes JavaScript-heavy web apps such as YouTube, Discord, TikTok and Spotify to Ultraviolet first, and text-first documentation/wiki/news domains to the classic `/browse` proxy first. Other sites use Ultraviolet first. Failed routes trigger automatic transport retry and browser-engine fallback; the UI does not expose transport or engine-switch buttons. Ultraviolet assets are served from the installed npm package; the server uses `@mercuryworkshop/wisp-js` for its Wisp transport.
 
 The Wisp transport is limited to TCP port 443, denies direct IP targets and private/loopback addresses, and applies `ALLOWED_HOSTS` as a hostname allowlist when an explicit allowlist is configured. This does not guarantee that all websites or videos will work. Schoolmathtime's `/health` endpoint returns `ultraviolet`, `libcurl`, and `scramjet` booleans so the optional engine assets can be checked after deployment.
 
-Ultraviolet transport initialization is time-bounded: if a transport does not initialize within 12 seconds, the browser tries the optional Libcurl transport after Epoxy. The **Retry transport** control lets you switch the preferred transport and reconnect without leaving the browser UI. The engines share one BareMux worker so both Ultraviolet and Scramjet can use the selected transport. Both transports currently use the same `/wisp/` WebSocket endpoint, so Libcurl can help with a client-transport initialization problem but cannot fix an unavailable Wisp server or blocked WebSocket route. The classic proxy remains available as a fallback.
+Ultraviolet transport initialization is time-bounded: if Epoxy does not initialize within 12 seconds, the client tries Libcurl. If a loaded Ultraviolet route fails, it automatically retries once with the alternate transport, then falls back to the classic proxy. If both standard engines fail, Scramjet is attempted automatically as a final fallback. All transport choices remain internal. Both available transports use the same `/wisp/` endpoint, so changing transports cannot fix an unavailable Wisp server or a blocked WebSocket route.
 
-**Scramjet experiment:** The browser toolbar also offers **Try Scramjet** as an optional third engine. It is loaded on demand and uses its own root-scope `/sw.js` service worker; Ultraviolet and the classic browser remain available. This build pins Scramjet 1.1.0 because that release uses the same BareMux-era transport interface as the current app dependencies. Do not upgrade this package alone to Scramjet 2.x: the newer generation uses the `proxy-transports` API and needs a coordinated transport/client migration. Scramjet is experimental, so test it against the current host and browser before relying on it.
+**Scramjet final fallback:** Scramjet 1.1.0 is loaded only if automatic Ultraviolet and classic-browser recovery fails. It uses its own root-scope `/sw.js` service worker. This version shares the BareMux-era interface with Ultraviolet; Scramjet 2.x uses `proxy-transports` and would require a coordinated migration.
 
-**Compatibility note:** Ultraviolet-App is marked as superseded by Scramjet by its maintainers. This integration is not a promise of compatibility with every browser or YouTube's anti-abuse systems. If the Wisp connection is unavailable or a website refuses the request, use the classic browser or the website's supported access method.
+**Compatibility note:** Ultraviolet-App is marked as superseded by Scramjet by its maintainers. This integration is not a promise of compatibility with every browser or YouTube's anti-abuse systems. If the Wisp connection is unavailable or a website refuses the request, automatic recovery can only try the installed engines and transports; it cannot fix a blocked or unavailable server endpoint.
 
 ## Video, JavaScript, and security
 
