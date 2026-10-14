@@ -1909,15 +1909,20 @@ async function startServer() {
   const MAX_WISP_CONNECTIONS = 80;
 
   try {
-    const [uvModule, epoxyModule, baremuxModule, wispModule] = await Promise.all([
+    const [uvModule, epoxyModule, baremuxModule, wispModule, libcurlModule] = await Promise.all([
       import("@titaniumnetwork-dev/ultraviolet"),
       import("@mercuryworkshop/epoxy-transport"),
       import("@mercuryworkshop/bare-mux/node"),
-      import("@mercuryworkshop/wisp-js/server")
+      import("@mercuryworkshop/wisp-js/server"),
+      import("@mercuryworkshop/libcurl-transport").catch((error) => {
+        console.warn("Optional Libcurl transport could not load:", error && error.message ? error.message : error);
+        return {};
+      })
     ]);
     const uvPath = uvModule.uvPath;
     const epoxyPath = epoxyModule.epoxyPath;
     const baremuxPath = baremuxModule.baremuxPath;
+    const libcurlPath = libcurlModule.libcurlPath;
     wispServer = wispModule.server;
     if (!uvPath || !epoxyPath || !baremuxPath || !wispServer ||
         typeof wispServer.routeRequest !== "function") {
@@ -1967,11 +1972,17 @@ async function startServer() {
       });
     }
 
-    // The local config takes precedence over package assets; other UV, Epoxy,
-    // and BareMux files are served from the installed packages.
+    // The local config takes precedence over package assets; UV, Epoxy,
+    // BareMux, and the optional Libcurl fallback are served from installed packages.
     app.use("/uv/", express.static(uvPath, { fallthrough: true, index: false }));
     app.use("/epoxy/", express.static(epoxyPath, { fallthrough: true, index: false }));
     app.use("/baremux/", express.static(baremuxPath, { fallthrough: true, index: false }));
+    if (libcurlPath) {
+      app.use("/libcurl/", express.static(libcurlPath, { fallthrough: true, index: false }));
+      console.log("Libcurl transport assets mounted.");
+    } else {
+      console.warn("Libcurl fallback unavailable; Ultraviolet will use Epoxy only.");
+    }
     ultravioletReady = true;
     console.log("Ultraviolet assets mounted.");
   } catch (error) {
