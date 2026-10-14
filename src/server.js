@@ -405,7 +405,7 @@ function normalizeInput(input) {
   if (!/\s/.test(value) && value.includes(".")) {
     return "https://" + value;
   }
-  return "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(value);
+  return "https://duckduckgo.com/?q=" + encodeURIComponent(value);
 }
 
 
@@ -1050,24 +1050,32 @@ async function streamRemoteMedia(input, req, res, redirectCount = 0) {
       }
 
       res.status(status);
-      const contentType = String(upstream.headers["content-type"] || "application/octet-stream").split(";")[0];
-      res.set("Content-Type", contentType);
+      // Preserve the media representation metadata exactly. Content-Range
+      // must describe the body being forwarded, and Content-Type parameters
+      // such as codec hints must not be discarded.
+      const contentType = String(upstream.headers["content-type"] || "application/octet-stream");
+      if (!/[\r\n]/.test(contentType)) res.set("Content-Type", contentType);
       const upstreamAcceptRanges = String(upstream.headers["accept-ranges"] || "").trim().toLowerCase();
-      // A 206 response proves byte ranges worked even if the origin omitted the
-      // header. Otherwise, advertise range support only when the origin says so.
       res.set("Accept-Ranges", status === 206 || upstreamAcceptRanges === "bytes" ? "bytes" : "none");
-      for (const header of ["content-length", "content-range", "last-modified", "etag"]) {
+      for (const header of [
+        "content-length", "content-range", "last-modified", "etag",
+        "content-encoding", "content-disposition", "vary"
+      ]) {
         const value = upstream.headers[header];
         if (typeof value === "string" && !/[\r\n]/.test(value)) res.set(header, value);
       }
       res.set("Cache-Control", "private, max-age=120");
       res.set("X-Content-Type-Options", "nosniff");
-      if (req.method === "HEAD" || status === 416) {
+      if (req.method === "HEAD") {
         upstream.resume();
         res.end();
         resolve();
         return;
       }
+      // Handle a silent/stalled media stream even after response headers arrive.
+      upstream.setTimeout(FETCH_TIMEOUT_MS, () => {
+        upstream.destroy(new Error("The media source stopped sending data."));
+      });
       upstream.on("error", (error) => {
         if (!res.headersSent) res.status(502).end("The media stream failed.");
         else res.destroy(error);
@@ -1986,6 +1994,14 @@ async function startServer() {
         ]) {
           wispAllowedHosts.add(host);
         }
+      }
+      // TikTok media and API calls span multiple CDN roots. Add these only
+      // when TikTok itself is explicitly allowed in the configured host list.
+      const permitsTikTok = ALLOWED_HOSTS.some((host) =>
+        host === "tiktok.com" || host.endsWith(".tiktok.com")
+      );
+      if (permitsTikTok) {
+        for (const host of TIKTOK_HOST_ROOTS) wispAllowedHosts.add(host);
       }
       wispServer.options.hostname_whitelist = [...wispAllowedHosts].map((host) => {
         const escaped = host.split(".").map((part) =>
