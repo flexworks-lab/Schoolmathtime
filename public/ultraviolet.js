@@ -15,8 +15,28 @@
   const error = byId("uv-error");
   const copyError = byId("uv-copy-error");
   const bookmark = byId("uv-bookmark");
-  const youtubeLogin = byId("uv-youtube-login");
+  const searchEngineSelect = byId("uv-search-engine");
+  const themeSelect = byId("uv-theme-mode");
+  const themeColorMeta = byId("uv-theme-color");
+  const faviconLink = byId("uv-favicon");
   const engineModeSelect = byId("uv-engine-mode");
+  const SEARCH_ENGINE_KEY = "schoolmathtime.searchEngine";
+  const THEME_KEY = "schoolmathtime.theme";
+  const SEARCH_ENGINES = ["duckduckgo","google","bing","brave","yahoo","ecosia","startpage"];
+  const THEMES = ["light","dark","blue","rose","green"];
+  const THEME_COLORS = { light:"#f8f9fa", dark:"#202124", blue:"#17263e", rose:"#fce7ed", green:"#e2f0e5" };
+  const THEME_ACCENTS = { light:"#4285f4", dark:"#8ab4f8", blue:"#8ab4f8", rose:"#c2185b", green:"#188038" };
+  let searchEngine = "duckduckgo";
+  let browserTheme = "light";
+  try {
+    const savedSearchEngine = localStorage.getItem(SEARCH_ENGINE_KEY);
+    if (SEARCH_ENGINES.includes(savedSearchEngine)) searchEngine = savedSearchEngine;
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (THEMES.includes(savedTheme)) browserTheme = savedTheme;
+  } catch {}
+  if (searchEngineSelect) searchEngineSelect.value = searchEngine;
+  if (themeSelect) themeSelect.value = browserTheme;
+  document.documentElement.dataset.theme = browserTheme;
   const ENGINE_MODE_KEY = "schoolmathtime.engineMode";
   let engineMode = "auto";
   try { engineMode = localStorage.getItem(ENGINE_MODE_KEY) || "auto"; } catch {}
@@ -40,6 +60,40 @@
   let scramjetLoading = null;
 
   function setStatus(message) { status.textContent = message; }
+
+  function applyBrowserTheme(value) {
+    browserTheme = THEMES.includes(value) ? value : "light";
+    document.documentElement.dataset.theme = browserTheme;
+    if (themeSelect) themeSelect.value = browserTheme;
+    if (themeColorMeta) themeColorMeta.content = THEME_COLORS[browserTheme];
+    try { localStorage.setItem(THEME_KEY, browserTheme); } catch {}
+    updatePageIdentity(currentTarget() || lastTarget || location.origin);
+  }
+
+  function updatePageIdentity(value) {
+    let host = "schoolmathtime";
+    try { host = new URL(value, location.href).hostname.replace(/^www\./i, "") || host; } catch {}
+    const initial = /^[a-z0-9]/i.test(host) ? host[0].toUpperCase() : "S";
+    const accent = THEME_ACCENTS[browserTheme] || THEME_ACCENTS.light;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="' + accent + '"/><text x="32" y="43" text-anchor="middle" font-family="Arial,sans-serif" font-size="39" font-weight="700" fill="#ffffff">' + initial + '</text></svg>';
+    if (faviconLink) faviconLink.href = "data:image/svg+xml," + encodeURIComponent(svg);
+    if (themeColorMeta) themeColorMeta.content = THEME_COLORS[browserTheme];
+    document.title = host + " — Schoolmathtime";
+  }
+
+  function buildSearchUrl(query) {
+    const q = encodeURIComponent(query);
+    const engines = {
+      duckduckgo: "https://duckduckgo.com/?q=" + q,
+      google: "https://www.google.com/search?gbv=1&q=" + q,
+      bing: "https://www.bing.com/search?q=" + q,
+      brave: "https://search.brave.com/search?q=" + q,
+      yahoo: "https://search.yahoo.com/search?p=" + q,
+      ecosia: "https://www.ecosia.org/search?q=" + q,
+      startpage: "https://www.startpage.com/sp/search?query=" + q
+    };
+    return engines[searchEngine] || engines.duckduckgo;
+  }
   function setError(message) {
     error.textContent = String(message || "Unknown proxy error");
     error.hidden = false;
@@ -75,7 +129,7 @@
     if (!/\s/.test(input) && input.includes(".")) {
       try { return new URL("https://" + input).toString(); } catch {}
     }
-    return "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(input);
+    return buildSearchUrl(input);
   }
 
   async function initializeTransport() {
@@ -244,6 +298,7 @@
     let target;
     try { target = makeTarget(value); }
     catch (err) { setError(err.message || err); return; }
+    updatePageIdentity(target);
 
     if (activeEngine === "scramjet") {
       void openScramjet(target, pushState);
@@ -513,6 +568,7 @@
     let target;
     try { target = makeTarget(value || currentTarget() || lastTarget || address.value); }
     catch (error) { setError(error.message || error); return; }
+    updatePageIdentity(target);
 
     if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
     singleEngineTimer = null;
@@ -690,6 +746,17 @@
     renderLibrary();
   }
 
+  searchEngineSelect?.addEventListener("change", () => {
+    searchEngine = SEARCH_ENGINES.includes(searchEngineSelect.value) ? searchEngineSelect.value : "duckduckgo";
+    try { localStorage.setItem(SEARCH_ENGINE_KEY, searchEngine); } catch {}
+    setStatus("Default search engine saved: " + searchEngineSelect.options[searchEngineSelect.selectedIndex].text + ".");
+  });
+
+  themeSelect?.addEventListener("change", () => {
+    applyBrowserTheme(themeSelect.value);
+    setStatus("Browser color theme updated.");
+  });
+
   engineModeSelect?.addEventListener("change", () => {
     engineMode = ["auto", "uv", "classic"].includes(engineModeSelect.value) ? engineModeSelect.value : "auto";
     try { localStorage.setItem(ENGINE_MODE_KEY, engineMode); } catch {}
@@ -810,15 +877,6 @@
       refreshBookmarkState();
     }
   });
-  youtubeLogin?.addEventListener("click", () => {
-    // Start Google's official YouTube sign-in page within the UV iframe. The
-    // continue parameter returns to YouTube through the same proxied frame.
-    const login = new URL("https://accounts.google.com/ServiceLogin");
-    login.searchParams.set("service", "youtube");
-    login.searchParams.set("continue", "https://www.youtube.com/");
-    login.searchParams.set("hl", "en");
-    openTarget(login.toString());
-  });
   window.addEventListener("popstate", (event) => {
     const target = event.state?.target;
     if (target) void openTarget(target, false);
@@ -830,6 +888,7 @@
     }
   });
 
+  applyBrowserTheme(browserTheme);
   renderLibrary();
   const initial = new URLSearchParams(location.search).get("url");
   if (initial) {
