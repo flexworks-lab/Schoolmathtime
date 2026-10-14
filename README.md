@@ -96,3 +96,11 @@ Render must run the latest commit, and production must use HTTPS. If `ALLOWED_HO
 ## Limits
 
 The short-lived caches are stored in memory and are cleared when the service restarts. Free hosting plans can sleep or have limited CPU/network capacity, so they cannot guarantee instant first loads. Dynamic websites may remain incomplete where their behavior depends on browser APIs this proxy does not translate.
+
+
+## Local games, caching, and performance
+
+- The `/games.html` page can run a selected standalone HTML file locally, embed an HTTPS utility, or load a selected SWF with the bundled Ruffle runtime when package assets are available.
+- The Scramjet service worker caches only a small allowlist of same-origin shell assets. Proxied pages, authentication/API requests, downloads, and CAPTCHA/security-challenge traffic are not cached.
+- Express compression middleware compresses eligible same-origin text responses. DNS lookup caching is already enabled for the classic proxy.
+- CAPTCHA verification remains controlled by the destination website. The proxy does not copy verification tokens or merge cross-origin cookies/localStorage into other sessions; if a site rejects a proxied challenge, use the site's supported browser flow.
