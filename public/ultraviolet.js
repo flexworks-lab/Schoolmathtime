@@ -95,13 +95,12 @@
     const transportFailures = [];
     let selectedTransport = "";
 
-    // Try the primary transport first. If its module or Wisp handshake cannot
-    // initialize, create a separate BareMux worker for Libcurl and try again.
+    // Use one shared BareMux worker for both engines and both transports.
+    // Scramjet's service worker locates this worker through the path registered
+    // by the browser page, so transport fallback must not create a second worker.
+    if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js");
     for (const candidate of transportCandidates) {
       try {
-        connection = new BareMux.BareMuxConnection(
-          "/baremux/worker.js?v=bare-mux-2-1-9&transport=" + candidate.id
-        );
         await withTimeout(
           connection.setTransport(candidate.url, candidate.options),
           12000,
@@ -171,7 +170,8 @@
         // navigation will create a fresh BareMuxConnection and call setTransport
         // again instead of reusing a wrapper whose transport may have died.
         transportReady = null;
-        connection = null;
+        // Keep the same BareMuxConnection; its worker client can reacquire a
+        // dead port, and the next attempt will replace the transport in place.
         throw error;
       });
     }
@@ -221,7 +221,6 @@
     if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
     if (engine === "uv") {
       transportReady = null;
-      connection = null;
     }
     attempt.pending[engine] = false;
     attempt.failures[engine] = String(reason || "The route failed to load.").slice(0, 900);
@@ -625,7 +624,6 @@
     const target = currentTarget() || address.value.trim();
     if (target) {
       transportReady = null;
-      connection = null;
       if (activeEngine === "scramjet") void openScramjet(target, false);
       else void openTarget(target, false);
     } else location.reload();
@@ -638,7 +636,6 @@
     }
     preferredTransport = preferredTransport === "epoxy" ? "libcurl" : "epoxy";
     transportReady = null;
-    connection = null;
     setStatus("Retrying with " + (preferredTransport === "epoxy" ? "Epoxy" : "Libcurl") + " transport…");
     if (activeEngine === "scramjet") void openScramjet(target, false);
     else void openSingleEngine("uv", target);
