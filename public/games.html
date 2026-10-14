@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local Games &amp; Apps — Schoolmathtime</title><link rel="stylesheet" href="/styles.css">
+<style>
+.games-page{max-width:1000px;margin:32px auto;padding:24px;color:var(--text,#f4f4f4)}.games-page a{color:inherit}.games-hero,.game-card{border:1px solid #555;border-radius:16px;padding:20px;margin:14px 0;background:#292929}.games-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}.games-page input,.games-page button{padding:10px;border-radius:8px;border:1px solid #777;background:#eee;color:#111}.games-page input{width:min(100%,650px)}.games-page iframe{width:100%;height:60vh;background:#fff;border:1px solid #777;border-radius:12px}.games-page .hint{opacity:.8;font-size:.92rem}#ruffle-player{min-height:120px}
+</style></head><body><main class="games-page">
+<a href="/">← Home</a> · <a href="/ultraviolet.html">Browser</a>
+<section class="games-hero"><h1>Local Games &amp; Apps</h1><p>Run a self-contained HTML file on this device or open an HTTPS utility in the embedded viewer. Local HTML assets do not need the proxy or Wisp connection.</p></section>
+<div class="games-grid">
+<section class="game-card"><h2>Run an HTML file</h2><p class="hint">Choose a standalone .html file. It is not uploaded to the server.</p><input id="html-file" type="file" accept=".html,.htm,text/html"><button id="run-html" type="button">Run local HTML</button></section>
+<section class="game-card"><h2>Web utility viewer</h2><p class="hint">Some websites prevent iframe embedding.</p><form id="web-form"><input id="web-url" type="url" placeholder="https://example.com" required><button type="submit">Open</button></form></section>
+<section class="game-card"><h2>Flash (Ruffle)</h2><p class="hint">Choose a SWF file to run locally. Compatibility varies by game.</p><input id="swf-file" type="file" accept=".swf,application/x-shockwave-flash"><button id="run-swf" type="button">Run SWF</button><div id="ruffle-player"></div></section>
+</div><iframe id="game-viewer" title="Game or utility viewer" sandbox="allow-scripts allow-forms allow-pointer-lock allow-downloads" hidden></iframe><p id="games-status" role="status" aria-live="polite">Ready.</p>
+</main><script src="/games.js" defer></script></body></html>
