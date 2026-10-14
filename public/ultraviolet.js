@@ -23,6 +23,7 @@
   let raceSerial = 0;
   let raceAttempt = null;
   let transportReady = null;
+  let preferredTransport = "epoxy";
   let scramjetController = null;
   let scramjetFrame = null;
   let scramjetLoading = null;
@@ -90,7 +91,7 @@
         url: "/libcurl/index.mjs?build=libcurl-fallback-1",
         options: [{ websocket: wispUrl }]
       }
-    ];
+    ].sort((a, b) => Number(b.id === preferredTransport) - Number(a.id === preferredTransport));
     const transportFailures = [];
     let selectedTransport = "";
 
@@ -107,9 +108,11 @@
           candidate.name + " transport did not initialize within 12 seconds."
         );
         selectedTransport = candidate.name;
+        preferredTransport = candidate.id;
         break;
       } catch (error) {
         transportFailures.push(candidate.name + ": " + String(error && error.message ? error.message : error));
+        preferredTransport = candidate.id === "epoxy" ? "libcurl" : "epoxy";
         connection = null;
       }
     }
@@ -620,8 +623,25 @@
   });
   byId("uv-refresh").addEventListener("click", () => {
     const target = currentTarget() || address.value.trim();
-    if (target) void openTarget(target, false);
-    else location.reload();
+    if (target) {
+      transportReady = null;
+      connection = null;
+      if (activeEngine === "scramjet") void openScramjet(target, false);
+      else void openTarget(target, false);
+    } else location.reload();
+  });
+  byId("uv-retry-transport")?.addEventListener("click", () => {
+    const target = currentTarget() || lastTarget || address.value.trim();
+    if (!target) {
+      setStatus("Enter a website before retrying the transport.");
+      return;
+    }
+    preferredTransport = preferredTransport === "epoxy" ? "libcurl" : "epoxy";
+    transportReady = null;
+    connection = null;
+    setStatus("Retrying with " + (preferredTransport === "epoxy" ? "Epoxy" : "Libcurl") + " transport…");
+    if (activeEngine === "scramjet") void openScramjet(target, false);
+    else void openSingleEngine("uv", target);
   });
   byId("uv-classic").addEventListener("click", () => {
     const target = currentTarget() || lastTarget || address.value.trim();
