@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Schoolmathtime Browser</title>
-  <link rel="stylesheet" href="/ultraviolet.css?v=youtube-login-1">
+  <link rel="stylesheet" href="/ultraviolet.css?v=auto-browser-2">
   <script src="/baremux/index.js?v=bare-mux-2-1-9" defer></script>
   <script src="/uv/uv.bundle.js" defer></script>
   <script src="/uv/uv.config.js?v=youtube-uv-layout-1" defer></script>
-  <script src="/ultraviolet.js?v=transport-retry-1" defer></script>
+  <script src="/ultraviolet.js?v=auto-browser-2" defer></script>
 </head>
 <body>
   <header class="uv-toolbar">
@@ -24,14 +24,27 @@
     </form>
     <button id="uv-youtube-login" class="uv-youtube-login" type="button" title="Open Google sign-in inside Ultraviolet; Google may restrict sign-in in proxied browsers">YouTube sign in</button>
     <button id="uv-bookmark" class="uv-icon" type="button" title="Bookmark this page" aria-label="Bookmark this page">☆</button>
+    <details id="uv-library" class="uv-library">
+      <summary aria-label="Open bookmarks and browsing history">Library</summary>
+      <div class="uv-library-panel">
+        <section>
+          <h2>Bookmarks</h2>
+          <ul id="uv-bookmark-list" class="uv-library-list"></ul>
+        </section>
+        <section>
+          <div class="uv-library-heading">
+            <h2>Recent history</h2>
+            <button id="uv-clear-history" type="button">Clear</button>
+          </div>
+          <ul id="uv-history-list" class="uv-library-list"></ul>
+        </section>
+      </div>
+    </details>
     <a class="uv-home" href="/">Home</a>
   </header>
   <div class="uv-status-row">
     <span id="uv-status" role="status" aria-live="polite">Enter an HTTPS website or a search term to start browsing.</span>
     <div class="uv-actions">
-      <button id="uv-classic" type="button">Use classic browser</button>
-      <button id="uv-retry-transport" type="button" title="Reconnect using the alternate transport">Retry transport</button>
-      <button id="uv-scramjet" type="button">Try Scramjet</button>
       <button id="uv-copy-error" type="button" hidden>Copy error</button>
     </div>
   </div>
