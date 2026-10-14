@@ -8,6 +8,10 @@
   const frame = byId("uv-frame");
   const classicFrame = byId("classic-frame");
   const engineSwitch = byId("uv-engine-switch");
+  const library = byId("uv-library");
+  const bookmarkList = byId("uv-bookmark-list");
+  const historyList = byId("uv-history-list");
+  const clearHistoryButton = byId("uv-clear-history");
   const welcome = byId("uv-welcome");
   const error = byId("uv-error");
   const copyError = byId("uv-copy-error");
@@ -16,6 +20,7 @@
   const scramjetButton = byId("uv-scramjet");
   const stage = document.querySelector(".uv-stage");
   const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
+  const HISTORY_KEY = "schoolmathtime.history";
   let connection = null;
   let lastTarget = "";
   let hasLoaded = false;
@@ -24,6 +29,9 @@
   let raceAttempt = null;
   let transportReady = null;
   let preferredTransport = "epoxy";
+  let routedAttempt = null;
+  let singleEngineTimer = null;
+  let automaticFailureDetails = "";
   let scramjetController = null;
   let scramjetFrame = null;
   let scramjetLoading = null;
@@ -34,7 +42,7 @@
     error.hidden = false;
     copyError.hidden = false;
     error.focus();
-    setStatus("Neither browser engine could open this page. The error text is selectable.");
+    setStatus("Automatic recovery could not open this page. The error text is selectable.");
   }
 
   // Some Wisp handshakes can stall instead of rejecting. Bound transport setup
@@ -265,95 +273,82 @@
     chooseWinner(attempt, engine);
   }
 
+  function hostMatchesRoots(host, roots) {
+    return roots.some((root) => host === root || host.endsWith("." + root));
+  }
+
+  function preferredEngineFor(value) {
+    let host = "";
+    try { host = new URL(value).hostname.toLowerCase().replace(/\.$/, ""); } catch {}
+
+    // JavaScript-heavy apps benefit from the service-worker browser engine.
+    const webAppHosts = [
+      "youtube.com", "youtube-nocookie.com", "accounts.google.com",
+      "myaccount.google.com", "consent.google.com", "discord.com",
+      "discordapp.com", "discordapp.net", "discord.gg", "tiktok.com",
+      "spotify.com"
+    ];
+    if (hostMatchesRoots(host, webAppHosts)) return "uv";
+
+    // Text-first pages avoid initializing a service worker and Wisp transport
+    // unless the classic route actually fails.
+    const textFirstHosts = [
+      "wikipedia.org", "wiktionary.org", "wikimedia.org",
+      "developer.mozilla.org", "mdn.dev", "docs.python.org", "docs.rs",
+      "readthedocs.io", "nodejs.org", "docs.github.com", "docs.npmjs.com",
+      "support.mozilla.org", "w3.org", "ietf.org", "apnews.com",
+      "reuters.com", "bbc.com", "npr.org", "theguardian.com", "nytimes.com"
+    ];
+    if (hostMatchesRoots(host, textFirstHosts) || host.startsWith("docs.") || host.startsWith("wiki.")) {
+      return "classic";
+    }
+
+    // Default to one engine at a time instead of doubling every request.
+    return "uv";
+  }
+
   function openTarget(value, pushState = true) {
     let target;
     try { target = makeTarget(value); }
     catch (err) { setError(err.message || err); return; }
 
-    // Keep the experimental engine selected while the user is navigating
-    // within it; switch back to Ultraviolet from the engine-switch control.
     if (activeEngine === "scramjet") {
       void openScramjet(target, pushState);
       return;
     }
 
-    // YouTube is substantially more JavaScript-heavy than the classic fetch
-    // proxy. Prefer Ultraviolet for YouTube and Google sign-in routes so the
-    // native page layout/session flow runs inside this browser frame.
-    if (isYouTubeOrGoogleSignin(target)) {
-      error.hidden = true;
-      copyError.hidden = true;
-      if (pushState) {
-        history.pushState({ target }, "", "/ultraviolet.html?url=" + encodeURIComponent(target));
-      }
-      openSingleEngine("uv", target);
-      return;
-    }
-
+    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
+    if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
+    raceAttempt = null;
+    routedAttempt = null;
+    singleEngineTimer = null;
+    automaticFailureDetails = "";
     error.hidden = true;
     copyError.hidden = true;
-
-    const attempt = {
-      id: ++raceSerial,
-      target,
-      pending: { uv: true, classic: true },
-      failures: { uv: "", classic: "" },
-      expected: { uv: "", classic: "" },
-      timer: null,
-      finished: false
-    };
-    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
-    raceAttempt = attempt;
-    activeEngine = "";
-    engineSwitch.hidden = true;
-    hasLoaded = false;
-    lastTarget = target;
-    address.value = target;
-    document.body.classList.remove("classic-active");
-    welcome.style.display = "none";
-    frame.style.display = "block";
-    classicFrame.style.display = "block";
-    frame.classList.add("race-hidden");
-    classicFrame.classList.add("race-hidden");
-    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
-    frame.dataset.expectedSrc = "";
-    classicFrame.dataset.expectedSrc = "";
-    frame.src = "about:blank";
-    classicFrame.src = "about:blank";
-    setStatus("Trying both browser routes for " + new URL(target).hostname + "…");
-
     if (pushState) {
-      const next = "/ultraviolet.html?url=" + encodeURIComponent(target);
-      history.pushState({ target }, "", next);
+      history.pushState({ target }, "", "/ultraviolet.html?url=" + encodeURIComponent(target));
     }
 
-    // Begin the classic request immediately while Ultraviolet prepares its
-    // service worker and Wisp connection. The first route with a usable page wins.
-    const classicPath = "/browse?url=" + encodeURIComponent(target);
-    attempt.expected.classic = new URL(classicPath, location.href).href;
-    classicFrame.dataset.expectedSrc = attempt.expected.classic;
-    classicFrame.src = classicPath;
-
-    attempt.timer = window.setTimeout(() => {
-      if (raceAttempt !== attempt || attempt.finished) return;
-      for (const engine of ["uv", "classic"]) {
-        if (attempt.pending[engine]) failCandidate(attempt, engine, "Timed out while opening the website.");
-      }
-    }, 30000);
-
-    void (async () => {
-      try {
-        await ensureTransport();
-        if (raceAttempt !== attempt || attempt.finished || !attempt.pending.uv) return;
-        const uvPath = __uv$config.prefix + __uv$config.encodeUrl(target);
-        attempt.expected.uv = new URL(uvPath, location.href).href;
-        frame.dataset.expectedSrc = attempt.expected.uv;
-        frame.src = uvPath;
-      } catch (err) {
-        failCandidate(attempt, "uv", err && err.stack ? err.stack : err);
-      }
-    })();
+    const preferred = preferredEngineFor(target);
+    const hostname = new URL(target).hostname;
+    const context = {
+      target,
+      preferredEngine: preferred,
+      activeEngine: "",
+      engineAttempts: { uv: 0, classic: 0 },
+      failures: { uv: [], classic: [] },
+      transportFallbackTried: false
+    };
+    routedAttempt = context;
+    lastTarget = target;
+    address.value = target;
+    hasLoaded = false;
+    welcome.style.display = "none";
+    setStatus("Opening " + hostname + " with " +
+      (preferred === "uv" ? "Ultraviolet" : "the classic browser") +
+      ". Engine and transport fallback are automatic.");
     refreshBookmarkState();
+    openSingleEngine(preferred, target, context);
   }
 
   function currentTarget() {
@@ -380,16 +375,33 @@
     return lastTarget;
   }
 
-  function openSingleEngine(engine, value) {
+  function openSingleEngine(engine, value, context = null) {
     let target;
     try { target = makeTarget(value || currentTarget() || lastTarget || address.value); }
-    catch (err) { setError(err.message || err); return; }
+    catch (err) {
+      if (context) handleRoutedFailure(engine, err.message || err);
+      else setError(err.message || err);
+      return;
+    }
+
+    if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
+    singleEngineTimer = null;
     if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
     if (raceAttempt) raceAttempt.finished = true;
     raceAttempt = null;
     const switchId = ++raceSerial;
     const winner = engine === "uv" ? frame : classicFrame;
     const loser = engine === "uv" ? classicFrame : frame;
+
+    routedAttempt = context;
+    if (context) {
+      context.activeEngine = engine;
+      context.engineAttempts[engine] += 1;
+      singleEngineTimer = window.setTimeout(() => {
+        handleRoutedFailure(engine, "Timed out while opening the website.");
+      }, 45000);
+    }
+
     activeEngine = engine;
     lastTarget = target;
     address.value = target;
@@ -397,7 +409,7 @@
     error.hidden = true;
     copyError.hidden = true;
     welcome.style.display = "none";
-    engineSwitch.hidden = engine !== "classic";
+    engineSwitch.hidden = true;
     document.body.classList.toggle("classic-active", engine === "classic");
     if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
     winner.style.display = "block";
@@ -406,15 +418,18 @@
     loser.classList.add("race-hidden");
     loser.dataset.expectedSrc = "";
     loser.src = "about:blank";
-    setStatus("Opening " + new URL(target).hostname + " with " +
-      (engine === "uv" ? "Ultraviolet" : "the classic proxy") + "…");
+    winner.dataset.expectedSrc = "";
 
     if (engine === "classic") {
       const classicPath = "/browse?url=" + encodeURIComponent(target);
       winner.dataset.expectedSrc = new URL(classicPath, location.href).href;
       winner.src = classicPath;
       winner.classList.remove("race-hidden");
-      hasLoaded = true;
+      if (context) {
+        setStatus("Opening " + new URL(target).hostname + " with the classic browser…");
+      } else {
+        hasLoaded = true;
+      }
       return;
     }
 
@@ -428,11 +443,98 @@
         winner.classList.remove("race-hidden");
       } catch (err) {
         if (switchId !== raceSerial) return;
+        if (context) {
+          handleRoutedFailure("uv", err && err.stack ? err.stack : err);
+          return;
+        }
         engineSwitch.hidden = true;
         welcome.style.display = "flex";
         setError(err && err.stack ? err.stack : err);
       }
     })();
+  }
+
+  function handleRoutedLoad(engine, candidateFrame) {
+    const context = routedAttempt;
+    if (!context || context.activeEngine !== engine) return;
+    const expected = candidateFrame.dataset.expectedSrc || "";
+    if (!expected || candidateFrame.src === "about:blank" || candidateFrame.src !== expected) return;
+
+    const failure = candidateFailure(candidateFrame);
+    if (failure) {
+      handleRoutedFailure(engine, failure);
+      return;
+    }
+
+    if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
+    singleEngineTimer = null;
+    routedAttempt = null;
+    activeEngine = engine;
+    hasLoaded = true;
+    document.body.classList.toggle("classic-active", engine === "classic");
+    const winner = engine === "uv" ? frame : classicFrame;
+    const loser = engine === "uv" ? classicFrame : frame;
+    winner.style.display = "block";
+    winner.classList.remove("race-hidden");
+    loser.classList.add("race-hidden");
+    loser.dataset.expectedSrc = "";
+    loser.src = "about:blank";
+    welcome.style.display = "none";
+
+    const hostname = new URL(context.target).hostname;
+    setStatus("Opened " + hostname + " with " +
+      (engine === "uv" ? "Ultraviolet" : "the classic browser") +
+      (engine === context.preferredEngine ? "." : " after automatic fallback."));
+    lastTarget = context.target;
+    address.value = context.target;
+    recordHistory(context.target);
+    refreshBookmarkState();
+  }
+
+  function automaticFailureSummary(context) {
+    const lines = [];
+    for (const engine of ["uv", "classic"]) {
+      const attempts = context.failures[engine] || [];
+      for (let index = 0; index < attempts.length; index += 1) {
+        lines.push((engine === "uv" ? "Ultraviolet" : "Classic") +
+          (attempts.length > 1 ? " attempt " + (index + 1) : "") + ": " + attempts[index]);
+      }
+    }
+    return lines.join("\n");
+  }
+
+  function handleRoutedFailure(engine, reason) {
+    const context = routedAttempt;
+    if (!context || context.activeEngine !== engine) return;
+    if (singleEngineTimer) window.clearTimeout(singleEngineTimer);
+    singleEngineTimer = null;
+
+    context.failures[engine].push(String(reason || "The route failed to load.").slice(0, 900));
+
+    // If Ultraviolet loaded its route but could not use the active transport,
+    // retry Ultraviolet once with the other installed transport automatically.
+    if (engine === "uv" && !context.transportFallbackTried) {
+      context.transportFallbackTried = true;
+      preferredTransport = preferredTransport === "epoxy" ? "libcurl" : "epoxy";
+      transportReady = null;
+      setStatus("Ultraviolet did not respond. Retrying automatically with the backup transport…");
+      openSingleEngine("uv", context.target, context);
+      return;
+    }
+
+    const other = engine === "uv" ? "classic" : "uv";
+    if (context.engineAttempts[other] === 0) {
+      setStatus("The first route failed. Trying the other browser engine automatically…");
+      openSingleEngine(other, context.target, context);
+      return;
+    }
+
+    // Scramjet is the final automatic fallback; no engine or transport chooser
+    // is shown to the user. If it also fails, show the selectable diagnostics.
+    routedAttempt = null;
+    automaticFailureDetails = automaticFailureSummary(context);
+    setStatus("Ultraviolet and the classic browser failed. Trying Scramjet automatically…");
+    void openScramjet(context.target, false);
   }
 
   async function loadScramjetRuntime() {
@@ -536,7 +638,9 @@
       scramjetFrame.frame.classList.remove("race-hidden");
       scramjetFrame.go(target);
       hasLoaded = true;
-      setStatus("Opened " + new URL(target).hostname + " with Scramjet (experimental).");
+      automaticFailureDetails = "";
+      recordHistory(target);
+      setStatus("Opened " + new URL(target).hostname + " with Scramjet (automatic fallback).");
       refreshBookmarkState();
     } catch (error) {
       if (switchId !== raceSerial) return;
@@ -544,8 +648,11 @@
       engineSwitch.hidden = true;
       if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
       welcome.style.display = "flex";
-      setError("Scramjet could not open " + new URL(target).hostname + ".\n" +
-        String(error && error.stack ? error.stack : error).slice(0, 1800));
+      const priorFailures = automaticFailureDetails;
+      automaticFailureDetails = "";
+      setError("Automatic recovery could not open " + new URL(target).hostname + "." +
+        (priorFailures ? "\n\nPrevious attempts:\n" + priorFailures : "") +
+        "\n\nScramjet: " + String(error && error.stack ? error.stack : error).slice(0, 1800));
     }
   }
 
@@ -592,11 +699,69 @@
     } catch { return []; }
   }
 
+  function readHistory() {
+    try {
+      const items = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      return Array.isArray(items) ? items.filter((item) => item && typeof item.url === "string") : [];
+    } catch { return []; }
+  }
+
+  function renderLibraryEntries(container, items, emptyText) {
+    if (!container) return;
+    container.replaceChildren();
+    if (!items.length) {
+      const empty = document.createElement("li");
+      empty.className = "uv-library-empty";
+      empty.textContent = emptyText;
+      container.appendChild(empty);
+      return;
+    }
+
+    for (const item of items) {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      const title = document.createElement("span");
+      const url = document.createElement("span");
+      button.type = "button";
+      button.className = "uv-library-entry";
+      button.title = item.url;
+      title.className = "uv-library-entry-title";
+      url.className = "uv-library-entry-url";
+      title.textContent = item.title || (() => { try { return new URL(item.url).hostname; } catch { return item.url; } })();
+      url.textContent = item.url;
+      button.append(title, url);
+      button.addEventListener("click", () => {
+        if (library) library.open = false;
+        address.value = item.url;
+        void openTarget(item.url);
+      });
+      li.appendChild(button);
+      container.appendChild(li);
+    }
+  }
+
+  function renderLibrary() {
+    renderLibraryEntries(bookmarkList, readBookmarks(), "No bookmarks yet.");
+    renderLibraryEntries(historyList, readHistory(), "Pages you open will appear here.");
+  }
+
+  function recordHistory(target) {
+    try {
+      const url = new URL(target);
+      if (url.protocol !== "https:") return;
+      const items = readHistory().filter((item) => item.url !== url.toString());
+      items.unshift({ title: url.hostname, url: url.toString(), visitedAt: Date.now() });
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 50)));
+    } catch {}
+    renderLibrary();
+  }
+
   function refreshBookmarkState() {
     const target = currentTarget();
     const saved = readBookmarks().some((item) => item.url === target);
     bookmark.textContent = saved ? "★" : "☆";
     bookmark.setAttribute("aria-pressed", String(saved));
+    renderLibrary();
   }
 
   form.addEventListener("submit", (event) => {
@@ -627,40 +792,15 @@
       else void openTarget(target, false);
     } else location.reload();
   });
-  byId("uv-retry-transport")?.addEventListener("click", () => {
-    const target = currentTarget() || lastTarget || address.value.trim();
-    if (!target) {
-      setStatus("Enter a website before retrying the transport.");
-      return;
+  clearHistoryButton?.addEventListener("click", () => {
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+      renderLibrary();
+      setStatus("Browsing history cleared on this device.");
+    } catch {
+      setStatus("Browsing history could not be cleared in this browser.");
     }
-    preferredTransport = preferredTransport === "epoxy" ? "libcurl" : "epoxy";
-    transportReady = null;
-    setStatus("Retrying with " + (preferredTransport === "epoxy" ? "Epoxy" : "Libcurl") + " transport…");
-    if (activeEngine === "scramjet") void openScramjet(target, false);
-    else void openSingleEngine("uv", target);
   });
-  byId("uv-classic").addEventListener("click", () => {
-    const target = currentTarget() || lastTarget || address.value.trim();
-    if (target) openSingleEngine("classic", target);
-    else location.assign("/");
-  });
-  scramjetButton?.addEventListener("click", () => {
-    const target = currentTarget() || lastTarget || address.value.trim();
-    if (target) void openScramjet(target);
-  });
-  void fetch("/health", { cache: "no-store" })
-    .then((response) => response.ok ? response.json() : Promise.reject(new Error("Health check failed")))
-    .then((health) => {
-      if (scramjetButton) {
-        scramjetButton.disabled = !health.scramjet;
-        scramjetButton.title = health.scramjet
-          ? "Try the experimental Scramjet engine"
-          : "Scramjet assets are unavailable on this server";
-      }
-    })
-    .catch(() => {
-      if (scramjetButton) scramjetButton.title = "Scramjet availability could not be checked; you may still try it";
-    });
   bookmark.addEventListener("click", () => {
     const target = currentTarget() || lastTarget;
     if (!target) { setStatus("Open a page before bookmarking it."); return; }
@@ -675,6 +815,7 @@
     try { localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(items.slice(0, 18))); }
     catch (err) { setStatus("Bookmark storage is unavailable in this browser."); return; }
     refreshBookmarkState();
+    renderLibrary();
     setStatus(index >= 0 ? "Bookmark removed." : "Bookmark saved.");
   });
   copyError.addEventListener("click", async () => {
@@ -697,19 +838,51 @@
       handleCandidateLoad("uv");
       return;
     }
+    if (routedAttempt && routedAttempt.activeEngine === "uv") {
+      handleRoutedLoad("uv", frame);
+      return;
+    }
     if (activeEngine === "uv") {
-      hasLoaded = true;
       const activeTarget = currentTarget();
+      const failure = candidateFailure(frame);
+      if (failure && activeTarget) {
+        void openTarget(activeTarget, false);
+        return;
+      }
+      hasLoaded = true;
       if (activeTarget) {
         lastTarget = activeTarget;
         address.value = activeTarget;
+        recordHistory(activeTarget);
       }
       setUltravioletLoadedStatus();
       refreshBookmarkState();
     }
   });
   classicFrame.addEventListener("load", () => {
-    handleCandidateLoad("classic");
+    if (raceAttempt && raceAttempt.pending.classic) {
+      handleCandidateLoad("classic");
+      return;
+    }
+    if (routedAttempt && routedAttempt.activeEngine === "classic") {
+      handleRoutedLoad("classic", classicFrame);
+      return;
+    }
+    if (activeEngine === "classic") {
+      const activeTarget = currentTarget();
+      const failure = candidateFailure(classicFrame);
+      if (failure && activeTarget) {
+        void openTarget(activeTarget, false);
+        return;
+      }
+      if (activeTarget) {
+        lastTarget = activeTarget;
+        address.value = activeTarget;
+        recordHistory(activeTarget);
+      }
+      setStatus("Page loaded through the classic browser.");
+      refreshBookmarkState();
+    }
   });
   youtubeLogin?.addEventListener("click", () => {
     // Start Google's official YouTube sign-in page within the UV iframe. The
@@ -718,12 +891,7 @@
     login.searchParams.set("service", "youtube");
     login.searchParams.set("continue", "https://www.youtube.com/");
     login.searchParams.set("hl", "en");
-    openSingleEngine("uv", login.toString());
-    setStatus("Opening Google sign-in inside Ultraviolet. Google may restrict sign-in in proxied browsers.");
-  });
-  engineSwitch.addEventListener("click", () => {
-    const target = currentTarget() || lastTarget || address.value.trim();
-    if (target) openSingleEngine("uv", target);
+    openTarget(login.toString());
   });
   window.addEventListener("popstate", (event) => {
     const target = event.state?.target;
@@ -736,6 +904,7 @@
     }
   });
 
+  renderLibrary();
   const initial = new URLSearchParams(location.search).get("url");
   if (initial) {
     address.value = initial;
