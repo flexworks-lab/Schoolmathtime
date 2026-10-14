@@ -77,6 +77,15 @@ const TIKTOK_HOST_ROOTS = [
   "ttwebview.com",
   "snssdk.com"
 ];
+const SEARCH_ENGINE_HOST_ROOTS = [
+  "duckduckgo.com",
+  "google.com",
+  "bing.com",
+  "brave.com",
+  "yahoo.com",
+  "ecosia.org",
+  "startpage.com"
+];
 const TIKTOK_SESSION_COOKIE = "stm_tt_sid";
 const TIKTOK_SESSION_TTL_MS = 24 * 60 * 60_000;
 const tiktokCookieJars = new Map();
@@ -135,9 +144,10 @@ app.use(helmet({ contentSecurityPolicy: {
 // its service worker, and the exact engine asset paths.
 app.use((req, res, next) => {
   const pathname = req.path || "/";
+  const isUvServicePath = pathname === "/uv/service" || pathname.startsWith("/uv/service/");
   const isUltravioletSurface = pathname === "/ultraviolet.html" ||
     pathname === "/sw.js" ||
-    pathname.startsWith("/uv/") ||
+    (pathname.startsWith("/uv/") && !isUvServicePath) ||
     pathname.startsWith("/baremux/") ||
     pathname.startsWith("/epoxy/") ||
     pathname.startsWith("/libcurl/") ||
@@ -145,7 +155,7 @@ app.use((req, res, next) => {
   if (isUltravioletSurface) {
     res.setHeader("Content-Security-Policy", [
       "default-src 'self' data: blob: https:",
-      "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline' https:",
+      "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https:",
       "style-src 'self' 'unsafe-inline' https:",
       "img-src 'self' data: blob: https:",
       "connect-src 'self' https: ws: wss:",
@@ -166,8 +176,11 @@ app.use((req, res, next) => {
     pathname === "/media" ||
     pathname === "/resource" ||
     pathname === "/tiktok-api" ||
-    pathname.startsWith("/uv/service/");
+    isUvServicePath;
   if (isProxiedResponse) {
+    // The UV service path should preserve the destination's CSP semantics;
+    // never leak this server's fallback Helmet policy onto a proxied document.
+    if (isUvServicePath) res.removeHeader("Content-Security-Policy");
     res.removeHeader("Cross-Origin-Opener-Policy");
     res.removeHeader("Cross-Origin-Embedder-Policy");
     res.removeHeader("Cross-Origin-Resource-Policy");
@@ -330,7 +343,12 @@ function isAllowedHost(hostname) {
   const permitsTikTok = ALLOWED_HOSTS.some((allowed) =>
     allowed === "tiktok.com" || allowed.endsWith(".tiktok.com")
   );
-  return permitsTikTok && isTikTokUpstreamHost(host);
+  if (permitsTikTok && isTikTokUpstreamHost(host)) return true;
+
+  // The browser explicitly offers these as its search providers. Permit only
+  // their known domain roots even when a deployment has a narrower content
+  // allowlist, otherwise the first search can fail inside the Wisp tunnel.
+  return SEARCH_ENGINE_HOST_ROOTS.some((root) => host === root || host.endsWith("." + root));
 }
 
 function isPublicAddress(address) {
@@ -1998,15 +2016,7 @@ async function startServer() {
       // The browser's search-engine selector is expected to work even when an
       // operator has an explicit destination allowlist. These are only the
       // selected search providers, not a wildcard for arbitrary destinations.
-      for (const host of [
-        "duckduckgo.com",
-        "google.com",
-        "bing.com",
-        "brave.com",
-        "yahoo.com",
-        "ecosia.org",
-        "startpage.com"
-      ]) wispAllowedHosts.add(host);
+      for (const host of SEARCH_ENGINE_HOST_ROOTS) wispAllowedHosts.add(host);
       const permitsYouTube = ALLOWED_HOSTS.some((host) =>
         host === "youtube.com" || host.endsWith(".youtube.com")
       );
