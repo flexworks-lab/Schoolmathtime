@@ -821,9 +821,5 @@
   if (initial) {
     address.value = initial;
     void openTarget(initial, false);
-  } else {
-    // Warm the transport while the user is on the browser's start page so
-    // the next typed navigation does not have to initialize it from scratch.
-    void ensureTransport().catch(() => {});
   }
 })();
