@@ -89,6 +89,8 @@ jobs:
           assert.equal(isTikTokUpstreamHost("www.tiktok.com"), true);
           assert.equal(isTikTokUpstreamHost("api16-normal-useast5.us.tiktokv.com"), true);
           assert.equal(isAllowedHost("p16-common-sign.tiktokcdn-us.com"), true);
+          assert.equal(isAllowedHost("duckduckgo.com"), true);
+          assert.equal(isAllowedHost("www.google.com"), true);
           assert.equal(isAllowedHost("example.com"), false);
           const html = proxyDocument("<!doctype html><html><head><title>TikTok</title><script src='/app.js'></script></head><body></body></html>", "https://www.tiktok.com/foryou", "");
           assert.match(html, /tiktok-api\?url=/);
@@ -148,11 +150,16 @@ jobs:
           grep -q '"googlevideo.com"' src/server.js
           grep -q '"youtubei.googleapis.com"' src/server.js
           grep -q 'const wispAllowedHosts = new Set(ALLOWED_HOSTS)' src/server.js
+          grep -q 'const SEARCH_ENGINE_HOST_ROOTS' src/server.js
+          grep -q 'const isUvServicePath' src/server.js
+          grep -q 'res.removeHeader("Content-Security-Policy")' src/server.js
           grep -q 'headers.Range = "bytes="' src/server.js
           grep -q '"content-length", "content-range", "last-modified", "etag",' src/server.js
           grep -q '"content-encoding", "content-disposition", "vary"' src/server.js
           grep -q 'for (const host of TIKTOK_HOST_ROOTS) wispAllowedHosts.add(host)' src/server.js
           grep -q 'return "https://duckduckgo.com/?q="' src/server.js
           curl --fail --silent --head http://127.0.0.1:3917/ultraviolet.html | grep -qi "content-security-policy:.*unsafe-eval"
+          ! curl --silent --head http://127.0.0.1:3917/uv/service/csp-smoke-test | grep -qi '^content-security-policy:'
+          ! curl --silent --head http://127.0.0.1:3917/ | grep -qi "content-security-policy:.*unsafe-inline"
           curl --fail --silent --head http://127.0.0.1:3917/baremux/worker.js | grep -qi "content-security-policy:.*unsafe-eval"
           ! curl --fail --silent --head http://127.0.0.1:3917/ | grep -qi "content-security-policy:.*unsafe-eval"
