@@ -112,14 +112,13 @@
       } catch (error) {
         transportFailures.push(candidate.name + ": " + String(error && error.message ? error.message : error));
         preferredTransport = candidate.id === "epoxy" ? "libcurl" : "epoxy";
-        connection = null;
       }
     }
 
     if (!selectedTransport || !connection) {
       throw new Error(
-        "Neither Epoxy nor Libcurl could initialize. Check the /wisp/ WebSocket endpoint, TLS configuration, and transport assets.\\n" +
-        transportFailures.join("\\n")
+        "Neither Epoxy nor Libcurl could initialize. Check the /wisp/ WebSocket endpoint, TLS configuration, and transport assets.\n" +
+        transportFailures.join("\n")
       );
     }
 
