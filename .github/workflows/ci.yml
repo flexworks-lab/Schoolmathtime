@@ -113,7 +113,7 @@ jobs:
           curl --fail --silent 'http://127.0.0.1:3917/baremux/index.js?v=bare-mux-2-1-9' > /dev/null
           grep -q '"@mercuryworkshop/bare-mux": "2.1.9"' package.json
           grep -q 'bare-mux-2.1.9.tgz' package-lock.json
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'worker.js?v=bare-mux-2-1-9'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'new BareMux.BareMuxConnection("/baremux/worker.js")'
           curl --fail --silent http://127.0.0.1:3917/epoxy/index.mjs > /dev/null
           curl --fail --silent http://127.0.0.1:3917/libcurl/index.mjs > /dev/null
           curl --fail --silent http://127.0.0.1:3917/scram/scramjet.all.js > /dev/null
