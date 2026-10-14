@@ -145,7 +145,7 @@ app.use((req, res, next) => {
   if (isUltravioletSurface) {
     res.setHeader("Content-Security-Policy", [
       "default-src 'self' data: blob: https:",
-      "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https:",
+      "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline' https:",
       "style-src 'self' 'unsafe-inline' https:",
       "img-src 'self' data: blob: https:",
       "connect-src 'self' https: ws: wss:",
@@ -157,6 +157,20 @@ app.use((req, res, next) => {
       "base-uri 'self'",
       "frame-ancestors 'none'"
     ].join("; "));
+  }
+  // Do not impose the app shell's cross-origin isolation policy on proxied
+  // documents/media. These responses need the destination's normal embedding
+  // semantics so cross-origin frames and MSE resources are not blocked by the
+  // proxy's own COOP/COEP headers.
+  const isProxiedResponse = pathname === "/browse" ||
+    pathname === "/media" ||
+    pathname === "/resource" ||
+    pathname === "/tiktok-api" ||
+    pathname.startsWith("/uv/service/");
+  if (isProxiedResponse) {
+    res.removeHeader("Cross-Origin-Opener-Policy");
+    res.removeHeader("Cross-Origin-Embedder-Policy");
+    res.removeHeader("Cross-Origin-Resource-Policy");
   }
   next();
 });
@@ -1981,6 +1995,18 @@ async function startServer() {
       // hosts. When YouTube itself is explicitly allowed, allow only its
       // fixed media/API dependencies through Wisp as well.
       const wispAllowedHosts = new Set(ALLOWED_HOSTS);
+      // The browser's search-engine selector is expected to work even when an
+      // operator has an explicit destination allowlist. These are only the
+      // selected search providers, not a wildcard for arbitrary destinations.
+      for (const host of [
+        "duckduckgo.com",
+        "google.com",
+        "bing.com",
+        "brave.com",
+        "yahoo.com",
+        "ecosia.org",
+        "startpage.com"
+      ]) wispAllowedHosts.add(host);
       const permitsYouTube = ALLOWED_HOSTS.some((host) =>
         host === "youtube.com" || host.endsWith(".youtube.com")
       );
