@@ -125,19 +125,22 @@ app.use(helmet({ contentSecurityPolicy: {
   }
 }}));
 
-// Ultraviolet's BareMux transport constructs an AsyncFunction inside its worker.
-// Keep the site's default CSP strict, but allow the required dynamic evaluation
-// only on the Ultraviolet shell and the proxy-engine assets that run its code.
+// Proxy-engine pages and assets need dynamic evaluation and WebAssembly.
+// Keep the normal app CSP stricter; scope the exceptions to the engine shell,
+// its service worker, and the exact engine asset paths.
 app.use((req, res, next) => {
   const pathname = req.path || "/";
   const isUltravioletSurface = pathname === "/ultraviolet.html" ||
+    pathname === "/sw.js" ||
     pathname.startsWith("/uv/") ||
     pathname.startsWith("/baremux/") ||
-    pathname.startsWith("/epoxy/");
+    pathname.startsWith("/epoxy/") ||
+    pathname.startsWith("/libcurl/") ||
+    pathname.startsWith("/scram/");
   if (isUltravioletSurface) {
     res.setHeader("Content-Security-Policy", [
       "default-src 'self' data: blob: https:",
-      "script-src 'self' 'unsafe-eval' https:",
+      "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https:",
       "style-src 'self' 'unsafe-inline' https:",
       "img-src 'self' data: blob: https:",
       "connect-src 'self' https: ws: wss:",
@@ -1313,7 +1316,12 @@ app.use(express.static(path.join(__dirname, "..", "public"), {
   }
 }));
 
-app.get("/health", (_req, res) => res.json({ ok: true, ultraviolet: ultravioletReady }));
+app.get("/health", (_req, res) => res.json({
+  ok: true,
+  ultraviolet: ultravioletReady,
+  libcurl: Boolean(require.resolve("@mercuryworkshop/libcurl-transport")),
+  scramjet: Boolean(require.resolve("@mercuryworkshop/scramjet/path"))
+}));
 
 // Official Google OAuth: use a top-level Google authorization redirect and
 // exchange the short-lived authorization code on the server. The proxy never
@@ -1909,7 +1917,7 @@ async function startServer() {
   const MAX_WISP_CONNECTIONS = 80;
 
   try {
-    const [uvModule, epoxyModule, baremuxModule, wispModule, libcurlModule] = await Promise.all([
+    const [uvModule, epoxyModule, baremuxModule, wispModule, libcurlModule, scramjetModule] = await Promise.all([
       import("@titaniumnetwork-dev/ultraviolet"),
       import("@mercuryworkshop/epoxy-transport"),
       import("@mercuryworkshop/bare-mux/node"),
@@ -1917,12 +1925,17 @@ async function startServer() {
       import("@mercuryworkshop/libcurl-transport").catch((error) => {
         console.warn("Optional Libcurl transport could not load:", error && error.message ? error.message : error);
         return {};
+      }),
+      import("@mercuryworkshop/scramjet/path").catch((error) => {
+        console.warn("Optional Scramjet engine could not load:", error && error.message ? error.message : error);
+        return {};
       })
     ]);
     const uvPath = uvModule.uvPath;
     const epoxyPath = epoxyModule.epoxyPath;
     const baremuxPath = baremuxModule.baremuxPath;
     const libcurlPath = libcurlModule.libcurlPath;
+    const scramjetPath = scramjetModule.scramjetPath;
     wispServer = wispModule.server;
     if (!uvPath || !epoxyPath || !baremuxPath || !wispServer ||
         typeof wispServer.routeRequest !== "function") {
@@ -1982,6 +1995,12 @@ async function startServer() {
       console.log("Libcurl transport assets mounted.");
     } else {
       console.warn("Libcurl fallback unavailable; Ultraviolet will use Epoxy only.");
+    }
+    if (scramjetPath) {
+      app.use("/scram/", express.static(scramjetPath, { fallthrough: true, index: false }));
+      console.log("Scramjet assets mounted.");
+    } else {
+      console.warn("Scramjet engine unavailable; the existing browser engines remain enabled.");
     }
     ultravioletReady = true;
     console.log("Ultraviolet assets mounted.");
