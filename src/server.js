@@ -11,6 +11,7 @@ const upstreamAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFree
 const express = require("express");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const compression = require("compression");
 const cheerio = require("cheerio");
 const ipaddr = require("ipaddr.js");
 
@@ -114,6 +115,8 @@ if (process.env.NODE_ENV === "production" && !process.env.PUBLIC_ORIGIN) {
 
 app.disable("x-powered-by");
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
+// Compress eligible same-origin HTML, CSS, JavaScript, and JSON responses.
+app.use(compression());
 app.use(helmet({ contentSecurityPolicy: {
   directives: {
     defaultSrc: ["'self'"],
@@ -1304,6 +1307,9 @@ function proxyDocument(remoteHtml, sourceUrl, origin) {
 function escapeAttribute(value) {
   return String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// Serve Ruffle from the installed package; no external CDN is required.
+app.use("/ruffle/", express.static(path.join(process.cwd(), "node_modules", "@ruffle-rs", "ruffle"), { fallthrough: true, index: false, maxAge: process.env.NODE_ENV === "production" ? "1h" : 0 }));
 
 app.use(express.static(path.join(__dirname, "..", "public"), {
   index: "index.html",
