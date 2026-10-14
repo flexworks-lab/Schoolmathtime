@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check public/app.js && node --check public/youtube-account.js && node --check public/proxy-chrome.js && node --check public/ultraviolet.js && node --check public/uv/uv.config.js && node --check public/sw.js"
+    "check": "node --check src/server.js && node --check public/app.js && node --check public/games.js && node --check public/youtube-account.js && node --check public/proxy-chrome.js && node --check public/ultraviolet.js && node --check public/uv/uv.config.js && node --check public/sw.js"
   },
   "engines": {
     "node": ">=24.0.0 <25.0.0"
@@ -24,6 +24,8 @@
     "@mercuryworkshop/libcurl-transport": "1.5.2",
     "@mercuryworkshop/scramjet": "https://github.com/MercuryWorkshop/scramjet/releases/download/v1.1.0/mercuryworkshop-scramjet-1.1.0.tgz",
     "@titaniumnetwork-dev/ultraviolet": "3.2.10",
-    "@mercuryworkshop/wisp-js": "0.5.0"
+    "@mercuryworkshop/wisp-js": "0.5.0",
+    "compression": "1.8.2",
+    "@ruffle-rs/ruffle": "0.7.1"
   }
 }
