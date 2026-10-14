@@ -56,3 +56,29 @@ body.classic-active .uv-stage{flex:1;min-height:0}
 .uv-engine-mode-label{font-size:11px;color:var(--muted);white-space:nowrap}
 .uv-engine-mode{max-width:145px;min-height:34px;border:1px solid var(--border);border-radius:var(--button);background:var(--panel);color:var(--text);padding:5px;font-size:11px}
 @media(max-width:760px){.uv-engine-mode-label{display:none}.uv-engine-mode{max-width:112px}}
+
+
+/* Browser appearance themes; values match the home page preference. */
+:root[data-theme="light"]{color-scheme:light;--bg:#fff;--panel:#f8f9fa;--line:#dadce0;--text:#202124;--muted:#5f6368;--button:#eef0f2;--accent:#1a73e8}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#111318;--panel:#1b1e26;--line:#343844;--text:#f2f3f7;--muted:#a9afbd;--button:#303440;--accent:#dce2ec}
+:root[data-theme="blue"]{color-scheme:dark;--bg:#101827;--panel:#17263e;--line:#3d5477;--text:#eaf2ff;--muted:#afc0dc;--button:#22334e;--accent:#8ab4f8}
+:root[data-theme="rose"]{color-scheme:light;--bg:#fff8fa;--panel:#fce7ed;--line:#e7bbc9;--text:#44212d;--muted:#85586a;--button:#f7d4df;--accent:#c2185b}
+:root[data-theme="green"]{color-scheme:light;--bg:#f7fbf7;--panel:#e2f0e5;--line:#bdd8c4;--text:#1d3827;--muted:#5c7766;--button:#d2e7d8;--accent:#188038}
+html[data-theme] body,html[data-theme] .uv-stage{background:var(--bg);color:var(--text)}
+html[data-theme] .uv-toolbar,html[data-theme] .uv-status-row{background:var(--panel);border-color:var(--line);color:var(--muted)}
+html[data-theme] .uv-address-form input{background:var(--bg);border-color:var(--line);color:var(--text)}
+html[data-theme] .uv-address-form input::placeholder{color:var(--muted)}
+html[data-theme] .uv-icon,html[data-theme] .uv-home,html[data-theme] .uv-address-form button,
+html[data-theme] .uv-actions button,html[data-theme] .uv-library>summary,
+html[data-theme] .uv-library-heading button{background:var(--button);border-color:var(--line);color:var(--text)}
+html[data-theme] .uv-icon:hover,html[data-theme] .uv-home:hover,html[data-theme] .uv-address-form button:hover{filter:brightness(1.06)}
+html[data-theme] .uv-brand{color:var(--text)}
+html[data-theme] .uv-welcome-mark{background:var(--accent);color:#fff}
+html[data-theme] .uv-welcome p{color:var(--muted)}
+html[data-theme] .uv-library-panel{background:var(--panel);border-color:var(--line)}
+html[data-theme] .uv-library-entry{background:var(--bg);color:var(--text)}
+html[data-theme] .uv-library-entry:hover{border-color:var(--line);background:var(--button)}
+html[data-theme] .uv-library-entry-url,html[data-theme] .uv-library-empty,html[data-theme] .uv-library-panel h2{color:var(--muted)}
+html[data-theme] .uv-toolbar-select{max-width:120px;min-width:0;min-height:34px;padding:4px 6px;border:1px solid var(--line);border-radius:9px;background:var(--button);color:var(--text);font:11px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+html[data-theme] .uv-toolbar-select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:700px){html[data-theme] .uv-toolbar-select{max-width:86px;padding:3px;font-size:10px}.uv-engine-mode-label{display:none}.uv-address-form{flex:1;min-width:58px}}
