@@ -509,3 +509,10 @@ html[data-theme="light"] .browser-statusbar a { color:#5f6368; }
   html[data-theme] .toolbar-select-label, html[data-theme] .theme-select-label { display:none; }
   html[data-theme] .toolbar-select { max-width:91px; font-size:10px; padding:0 3px; }
 }
+
+@media (max-width:620px) {
+  html[data-theme] .toolbar-row { flex-wrap:wrap; }
+  html[data-theme] .address-form { order:2; flex:1 1 100%; min-width:0; }
+  html[data-theme] .toolbar-select { max-width:82px; width:82px; }
+  html[data-theme] .toolbar-select-label { display:none; }
+}
