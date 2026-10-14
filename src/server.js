@@ -93,6 +93,8 @@ let youtubeSearchWindowStartedAt = Date.now();
 let youtubeSearchApiCalls = 0;
 let responseCacheBytes = 0;
 let ultravioletReady = false;
+let libcurlReady = false;
+let scramjetReady = false;
 
 function parseAllowedHosts(value) {
   return [...new Set(String(value || "").split(",").map((item) =>
@@ -1319,8 +1321,8 @@ app.use(express.static(path.join(__dirname, "..", "public"), {
 app.get("/health", (_req, res) => res.json({
   ok: true,
   ultraviolet: ultravioletReady,
-  libcurl: Boolean(require.resolve("@mercuryworkshop/libcurl-transport")),
-  scramjet: Boolean(require.resolve("@mercuryworkshop/scramjet/path"))
+  libcurl: libcurlReady,
+  scramjet: scramjetReady
 }));
 
 // Official Google OAuth: use a top-level Google authorization redirect and
@@ -1936,6 +1938,8 @@ async function startServer() {
     const baremuxPath = baremuxModule.baremuxPath;
     const libcurlPath = libcurlModule.libcurlPath;
     const scramjetPath = scramjetModule.scramjetPath;
+    libcurlReady = Boolean(libcurlPath);
+    scramjetReady = Boolean(scramjetPath);
     wispServer = wispModule.server;
     if (!uvPath || !epoxyPath || !baremuxPath || !wispServer ||
         typeof wispServer.routeRequest !== "function") {
