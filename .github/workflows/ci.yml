@@ -115,9 +115,20 @@ jobs:
           grep -q 'bare-mux-2.1.9.tgz' package-lock.json
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'worker.js?v=bare-mux-2-1-9'
           curl --fail --silent http://127.0.0.1:3917/epoxy/index.mjs > /dev/null
+          curl --fail --silent http://127.0.0.1:3917/libcurl/index.mjs > /dev/null
+          curl --fail --silent http://127.0.0.1:3917/scram/scramjet.all.js > /dev/null
+          curl --fail --silent http://127.0.0.1:3917/scram/scramjet.wasm.wasm > /dev/null
+          curl --fail --silent http://127.0.0.1:3917/sw.js | grep -q 'ScramjetServiceWorker'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-retry-transport"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-scramjet"'
+          curl --fail --silent http://127.0.0.1:3917/health | grep -q '"libcurl":true'
+          curl --fail --silent http://127.0.0.1:3917/health | grep -q '"scramjet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'const transport = "/epoxy/index.mjs?build=wisp-mux-reset-1"'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'await connection.setTransport(transport'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'url: "/epoxy/index.mjs?build=wisp-mux-reset-3"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'url: "/libcurl/index.mjs?build=libcurl-fallback-1"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'connection.setTransport(candidate.url, candidate.options)'
+          grep -q '"@mercuryworkshop/libcurl-transport": "1.5.2"' package.json
+          grep -q '"@mercuryworkshop/scramjet": "https://github.com/MercuryWorkshop/scramjet/releases/download/v1.1.0/mercuryworkshop-scramjet-1.1.0.tgz"' package.json
           grep -q 'wispServer.options.wisp_version = 2' src/server.js
           grep -q 'wispServer.options.stream_limit_total = 128' src/server.js
           grep -q 'wispServer.options.stream_limit_per_host = -1' src/server.js
