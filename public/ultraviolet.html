@@ -1,15 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta id="uv-theme-color" name="theme-color" content="#f8f9fa">
+  <link id="uv-favicon" rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Schoolmathtime Browser</title>
-  <link rel="stylesheet" href="/ultraviolet.css?v=auto-browser-2">
+  <link rel="stylesheet" href="/ultraviolet.css?v=browser-themes-2">
   <script src="/baremux/index.js?v=bare-mux-2-1-9" defer></script>
   <script src="/uv/uv.bundle.js" defer></script>
   <script src="/uv/uv.config.js?v=youtube-uv-layout-1" defer></script>
-  <script src="/ultraviolet.js?v=auto-browser-2" defer></script>
+  <script src="/ultraviolet.js?v=browser-themes-2" defer></script>
 </head>
 <body>
   <header class="uv-toolbar">
@@ -22,9 +24,12 @@
       <input id="uv-address" type="text" placeholder="Search or enter an HTTPS website" autocomplete="url" spellcheck="false">
       <button type="submit">Go</button>
     </form>
+    <label class="uv-engine-mode-label" for="uv-search-engine">Search</label>
+    <select id="uv-search-engine" class="uv-toolbar-select" aria-label="Default search engine"><option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option><option value="brave">Brave</option><option value="yahoo">Yahoo</option><option value="ecosia">Ecosia</option><option value="startpage">Startpage</option></select>
+    <label class="uv-engine-mode-label" for="uv-theme-mode">Color</label>
+    <select id="uv-theme-mode" class="uv-toolbar-select" aria-label="Browser color theme"><option value="light">Light</option><option value="dark">Dark</option><option value="blue">Blue</option><option value="rose">Rose</option><option value="green">Green</option></select>
     <label class="uv-engine-mode-label" for="uv-engine-mode">Engine</label>
-    <select id="uv-engine-mode" class="uv-engine-mode" aria-label="Browser engine preference"><option value="auto">Auto</option><option value="uv">Force Ultraviolet</option><option value="classic">Force Classic</option></select>
-    <button id="uv-youtube-login" class="uv-youtube-login" type="button" title="Open Google sign-in inside Ultraviolet; Google may restrict sign-in in proxied browsers">YouTube sign in</button>
+    <select id="uv-engine-mode" class="uv-toolbar-select" aria-label="Browser engine preference"><option value="auto">Auto engine</option><option value="uv">Prefer UV</option><option value="classic">Prefer classic</option></select>
     <button id="uv-bookmark" class="uv-icon" type="button" title="Bookmark this page" aria-label="Bookmark this page">☆</button>
     <details id="uv-library" class="uv-library">
       <summary aria-label="Open bookmarks and browsing history">Library</summary>
@@ -46,7 +51,7 @@
     <a class="uv-home" href="/">Home</a>
   </header>
   <div class="uv-status-row">
-    <span id="uv-status" role="status" aria-live="polite">Enter an HTTPS website or a search term to start browsing.</span>
+    <span id="uv-status" role="status" aria-live="polite">Enter a website or a search term to start browsing. DuckDuckGo is the default search engine.</span>
     <div class="uv-actions">
       <button id="uv-copy-error" type="button" hidden>Copy error</button>
     </div>
@@ -57,8 +62,8 @@
     <iframe id="classic-frame" title="Classic proxy candidate" referrerpolicy="no-referrer"></iframe>
     <div id="uv-welcome" class="uv-welcome">
       <div class="uv-welcome-mark">S</div>
-      <h1>Browse with Ultraviolet</h1>
-      <p>Enter an HTTPS address or search term above. The classic Schoolmathtime browser remains available as a fallback.</p>
+      <h1>Search the web</h1>
+      <p>Enter a website or search term above. Choose your search engine and browser colors from the toolbar.</p>
     </div>
   </main>
 </body>
