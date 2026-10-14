@@ -119,8 +119,15 @@ jobs:
           curl --fail --silent http://127.0.0.1:3917/scram/scramjet.all.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/scram/scramjet.wasm.wasm > /dev/null
           curl --fail --silent http://127.0.0.1:3917/sw.js | grep -q 'ScramjetServiceWorker'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-retry-transport"'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-scramjet"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-library"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-bookmark-list"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-history-list"'
+          ! curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-retry-transport"'
+          ! curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-scramjet"'
+          grep -q 'function preferredEngineFor(value)' public/ultraviolet.js
+          grep -q 'function handleRoutedFailure(engine, reason)' public/ultraviolet.js
+          grep -q 'transportFallbackTried' public/ultraviolet.js
+          grep -q '#uv-engine-switch{display:none!important}' public/ultraviolet.css
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"libcurl":true'
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"scramjet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
