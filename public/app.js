@@ -3,6 +3,53 @@ const targetInput = document.querySelector("#targetInput");
 const browserAddress = document.querySelector("#browserAddress");
 const browserNotice = document.querySelector("#browserNotice");
 const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
+const SEARCH_ENGINE_KEY = "schoolmathtime.searchEngine";
+const THEME_KEY = "schoolmathtime.theme";
+const searchEngineSelect = document.querySelector("#searchEngineSelect");
+const themeSelect = document.querySelector("#themeSelect");
+const themeColorMeta = document.querySelector("#appThemeColor");
+const faviconLink = document.querySelector("#appFavicon");
+const THEME_ACCENTS = { light: "#4285f4", dark: "#8ab4f8", blue: "#8ab4f8", rose: "#c2185b", green: "#188038" };
+const THEME_COLORS = { light: "#f8f9fa", dark: "#202124", blue: "#17263e", rose: "#fce7ed", green: "#e2f0e5" };
+function readPreference(key, allowed, fallback) {
+  try { const value = localStorage.getItem(key); return allowed.includes(value) ? value : fallback; }
+  catch { return fallback; }
+}
+let searchEngine = readPreference(SEARCH_ENGINE_KEY, ["duckduckgo","google","bing","brave","yahoo","ecosia","startpage"], "duckduckgo");
+let browserTheme = readPreference(THEME_KEY, ["light","dark","blue","rose","green"], "light");
+if (searchEngineSelect) searchEngineSelect.value = searchEngine;
+if (themeSelect) themeSelect.value = browserTheme;
+document.documentElement.dataset.theme = browserTheme;
+if (themeColorMeta) themeColorMeta.content = THEME_COLORS[browserTheme];
+function applyBrowserTheme(value) {
+  browserTheme = ["light","dark","blue","rose","green"].includes(value) ? value : "light";
+  document.documentElement.dataset.theme = browserTheme;
+  if (themeSelect) themeSelect.value = browserTheme;
+  if (themeColorMeta) themeColorMeta.content = THEME_COLORS[browserTheme];
+  try { localStorage.setItem(THEME_KEY, browserTheme); } catch {}
+}
+function makeFaviconFor(value) {
+  let host = "schoolmathtime";
+  try { host = new URL(value).hostname.replace(/^www\./i, "") || host; } catch {}
+  const initial = /^[a-z0-9]/i.test(host) ? host[0].toUpperCase() : "S";
+  const accent = THEME_ACCENTS[browserTheme] || THEME_ACCENTS.light;
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="' + accent + '"/><text x="32" y="43" text-anchor="middle" font-family="Arial,sans-serif" font-size="39" font-weight="700" fill="#ffffff">' + initial + '</text></svg>';
+  if (faviconLink) faviconLink.href = "data:image/svg+xml," + encodeURIComponent(svg);
+  return host;
+}
+function searchUrl(query) {
+  const q = encodeURIComponent(query);
+  const engines = {
+    duckduckgo: "https://duckduckgo.com/?q=" + q,
+    google: "https://www.google.com/search?gbv=1&q=" + q,
+    bing: "https://www.bing.com/search?q=" + q,
+    brave: "https://search.brave.com/search?q=" + q,
+    yahoo: "https://search.yahoo.com/search?p=" + q,
+    ecosia: "https://www.ecosia.org/search?q=" + q,
+    startpage: "https://www.startpage.com/sp/search?query=" + q
+  };
+  return engines[searchEngine] || engines.duckduckgo;
+}
 
 function announce(message) {
   browserNotice.textContent = message;
@@ -29,7 +76,9 @@ function navigate(value) {
     (!query.split("").some((character) => character.charCodeAt(0) <= 32) && query.includes("."));
   const destination = isUrl
     ? query
-    : "https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query);
+    : searchUrl(query);
+  const host = makeFaviconFor(destination);
+  document.title = host + " — Schoolmathtime";
   window.location.assign("/ultraviolet.html?url=" + encodeURIComponent(destination));
 }
 
@@ -112,6 +161,24 @@ document.querySelector("#addressForm").addEventListener("submit", (event) => {
   navigate(value);
 });
 
+searchEngineSelect?.addEventListener("change", () => {
+  searchEngine = ["duckduckgo","google","bing","brave","yahoo","ecosia","startpage"].includes(searchEngineSelect.value) ? searchEngineSelect.value : "duckduckgo";
+  try { localStorage.setItem(SEARCH_ENGINE_KEY, searchEngine); } catch {}
+  const names = { duckduckgo:"DuckDuckGo", google:"Google", bing:"Bing", brave:"Brave", yahoo:"Yahoo", ecosia:"Ecosia", startpage:"Startpage" };
+  announce("Default search engine: " + names[searchEngine] + ".");
+});
+themeSelect?.addEventListener("change", () => {
+  applyBrowserTheme(themeSelect.value);
+  const current = new URLSearchParams(location.search).get("url");
+  makeFaviconFor(current || location.origin);
+  announce("Browser color theme updated.");
+});
+document.querySelector("#luckyButton")?.addEventListener("click", () => {
+  const value = targetInput.value.trim();
+  if (!value) { targetInput.focus(); return; }
+  browserAddress.value = value;
+  navigate(value);
+});
 document.querySelector("#browseForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const value = targetInput.value.trim();
