@@ -18,8 +18,8 @@ button{cursor:pointer}
 .uv-status-row{min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 14px;color:var(--muted);border-bottom:1px solid var(--line);font-size:12px}
 .uv-actions{display:flex;gap:8px}.uv-actions button{font-size:12px;min-height:27px;padding:2px 8px}
 .uv-stage{position:relative;flex:1;min-height:0;background:#0c0d10}
-#uv-frame,#classic-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:white;display:none;opacity:1;pointer-events:auto;z-index:2}
-#uv-frame.race-hidden,#classic-frame.race-hidden{display:block!important;opacity:0!important;pointer-events:none!important;z-index:0!important}
+#uv-frame,#classic-frame,#scramjet-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:white;display:none;opacity:1;pointer-events:auto;z-index:2}
+#uv-frame.race-hidden,#classic-frame.race-hidden,#scramjet-frame.race-hidden{display:block!important;opacity:0!important;pointer-events:none!important;z-index:0!important}
 body.classic-active .uv-toolbar,body.classic-active .uv-status-row,body.classic-active #uv-error{display:none!important}
 body.classic-active .uv-stage{flex:1;min-height:0}
 
