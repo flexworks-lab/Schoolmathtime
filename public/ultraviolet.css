@@ -52,3 +52,7 @@ body.classic-active .uv-stage{flex:1;min-height:0}
 @media(max-width:700px){.uv-library>summary{min-height:31px;padding:0 7px}.uv-library-panel{right:-45px}}
 
 .uv-toolbar .uv-home{white-space:nowrap}
+
+.uv-engine-mode-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.uv-engine-mode{max-width:145px;min-height:34px;border:1px solid var(--border);border-radius:var(--button);background:var(--panel);color:var(--text);padding:5px;font-size:11px}
+@media(max-width:760px){.uv-engine-mode-label{display:none}.uv-engine-mode{max-width:112px}}
