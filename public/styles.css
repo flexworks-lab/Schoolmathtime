@@ -417,3 +417,95 @@ button { cursor: pointer; }
 .legal-page-main a { color: #c5d7f9; }
 .legal-page-updated { margin: 0 0 24px; color: #838a96 !important; font-size: 11px; }
 .legal-page-main ul { padding-left: 22px; }
+
+
+/* Chrome-inspired appearance themes, shared between the home page and browser view. */
+:root[data-theme="light"] {
+  color-scheme: light; --page-bg:#fff; --chrome:#f8f9fa; --chrome-raised:#fff;
+  --chrome-hover:#e8eaed; --chrome-border:#dadce0; --text:#202124; --muted:#5f6368;
+  --subtle:#80868b; --accent:#1a73e8; --accent-ink:#fff;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark; --page-bg:#111216; --chrome:#202124; --chrome-raised:#292a2d;
+  --chrome-hover:#35363a; --chrome-border:#3c4043; --text:#e8eaed; --muted:#9aa0a6;
+  --subtle:#73777d; --accent:#a8c7fa; --accent-ink:#202124;
+}
+:root[data-theme="blue"] {
+  color-scheme: dark; --page-bg:#101827; --chrome:#17263e; --chrome-raised:#22334e;
+  --chrome-hover:#2c4264; --chrome-border:#3d5477; --text:#eaf2ff; --muted:#afc0dc;
+  --subtle:#879ab9; --accent:#8ab4f8; --accent-ink:#152238;
+}
+:root[data-theme="rose"] {
+  color-scheme: light; --page-bg:#fff8fa; --chrome:#fce7ed; --chrome-raised:#fff;
+  --chrome-hover:#f7d4df; --chrome-border:#e7bbc9; --text:#44212d; --muted:#85586a;
+  --subtle:#9b7381; --accent:#c2185b; --accent-ink:#fff;
+}
+:root[data-theme="green"] {
+  color-scheme: light; --page-bg:#f7fbf7; --chrome:#e2f0e5; --chrome-raised:#fff;
+  --chrome-hover:#d2e7d8; --chrome-border:#bdd8c4; --text:#1d3827; --muted:#5c7766;
+  --subtle:#7b9282; --accent:#188038; --accent-ink:#fff;
+}
+html[data-theme] body, html[data-theme] .browser-window, html[data-theme] .browser-content {
+  background:var(--page-bg); color:var(--text);
+}
+html[data-theme] .browser-chrome, html[data-theme] .browser-statusbar {
+  background:var(--chrome); color:var(--muted); border-color:var(--chrome-border);
+}
+html[data-theme] .toolbar-row { background:var(--chrome); }
+html[data-theme] .chrome-icon-button { color:var(--muted); }
+html[data-theme] .chrome-icon-button:hover { color:var(--text); background:var(--chrome-hover); }
+html[data-theme] .address-form, html[data-theme] .home-search-form {
+  background:var(--chrome-raised); border-color:var(--chrome-border);
+}
+html[data-theme] .address-form input, html[data-theme] .home-search-form input { color:var(--text); }
+html[data-theme] .address-form input::placeholder, html[data-theme] .home-search-form input::placeholder { color:var(--muted); }
+html[data-theme] .address-go, html[data-theme] .search-submit { background:var(--accent); color:var(--accent-ink); }
+html[data-theme] .address-go:hover, html[data-theme] .search-submit:hover { filter:brightness(1.06); }
+html[data-theme] .home-content h1:not(.google-wordmark), html[data-theme] .brand-wordmark { color:var(--text); }
+html[data-theme] .home-logo { display:none; }
+html[data-theme] .google-wordmark {
+  color:transparent;
+  background:linear-gradient(90deg,#4285f4 0%,#4285f4 19%,#ea4335 20%,#ea4335 38%,#fbbc05 39%,#fbbc05 56%,#4285f4 57%,#4285f4 73%,#34a853 74%,#34a853 88%,#ea4335 89%,#ea4335 100%);
+  -webkit-background-clip:text; background-clip:text;
+  font-weight:500; letter-spacing:-2px;
+}
+html[data-theme] .home-tagline, html[data-theme] .home-hint,
+html[data-theme] .section-caption, html[data-theme] .muted { color:var(--muted); }
+html[data-theme] .caption-line { background:var(--chrome-border); }
+html[data-theme] .shortcut, html[data-theme] .youtube-search-panel {
+  color:var(--text); background:var(--chrome-raised); border-color:var(--chrome-border);
+}
+html[data-theme] .shortcut:hover { background:var(--chrome-hover); border-color:var(--chrome-border); }
+html[data-theme] .shortcut-icon { background:var(--chrome-hover); color:var(--accent); }
+html[data-theme] .youtube-search-heading h2, html[data-theme] .youtube-account-copy h3 { color:var(--text); }
+html[data-theme] .youtube-search-heading p, html[data-theme] .youtube-search-status,
+html[data-theme] .youtube-account-copy p { color:var(--muted); }
+html[data-theme] .youtube-search-form input { color:var(--text); background:var(--page-bg); border-color:var(--chrome-border); }
+html[data-theme] .youtube-result-card { background:var(--page-bg); border-color:var(--chrome-border); }
+html[data-theme] .youtube-result-title { color:var(--text); }
+html[data-theme] .youtube-account { background:var(--chrome-raised); border-color:var(--chrome-border); }
+html[data-theme] .youtube-account-connect { background:var(--accent); color:var(--accent-ink); border-color:var(--chrome-border); }
+html[data-theme] .toolbar-select {
+  max-width:120px; min-width:0; height:30px; padding:0 6px; border:1px solid var(--chrome-border);
+  border-radius:8px; color:var(--text); background:var(--chrome-raised); font-size:11px;
+}
+html[data-theme] .toolbar-select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+html[data-theme] .toolbar-select-label { color:var(--muted); font-size:10px; white-space:nowrap; }
+html[data-theme] .home-search-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-top:24px; }
+html[data-theme] .home-search-action {
+  min-height:36px; padding:0 16px; border:1px solid transparent; border-radius:5px;
+  color:var(--text); background:var(--chrome); font-size:12px;
+}
+html[data-theme] .home-search-action:hover { border-color:var(--chrome-border); box-shadow:0 1px 2px #00000012; }
+html[data-theme] .home-engine-choice { margin-top:18px; color:var(--muted); font-size:10px; text-align:center; }
+html[data-theme] .home-tagline { margin-top:0; }
+html[data-theme="light"] .browser-statusbar { background:#f8f9fa; }
+html[data-theme="light"] .home-search-form { box-shadow:0 1px 6px #20212425; }
+html[data-theme="light"] .home-search-form:hover, html[data-theme="light"] .home-search-form:focus-within {
+  border-color:#d2d5da; box-shadow:0 2px 8px #20212428;
+}
+html[data-theme="light"] .browser-statusbar a { color:#5f6368; }
+@media (max-width:760px) {
+  html[data-theme] .toolbar-select-label, html[data-theme] .theme-select-label { display:none; }
+  html[data-theme] .toolbar-select { max-width:91px; font-size:10px; padding:0 3px; }
+}
