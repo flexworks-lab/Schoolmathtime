@@ -1,18 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#202124">
+  <meta id="appThemeColor" name="theme-color" content="#f8f9fa">
+  <link id="appFavicon" rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="description" content="Schoolmathtime — your web browsing space.">
   <title>Schoolmathtime</title>
-  <link rel="stylesheet" href="/styles.css?v=youtube-api-search-1">
+  <link rel="stylesheet" href="/styles.css?v=google-home-theme-2">
   <link rel="prefetch" href="/baremux/index.js" as="script">
   <link rel="prefetch" href="/uv/uv.bundle.js" as="script">
   <link rel="prefetch" href="/uv/uv.config.js" as="script">
   <link rel="prefetch" href="/epoxy/index.mjs" as="script">
   <link rel="prefetch" href="/libcurl/index.mjs" as="script">
-  <script src="/app.js?v=ultraviolet-engine-1" defer></script>
+  <script src="/app.js?v=google-home-theme-2" defer></script>
   <script src="/youtube-account.js?v=google-youtube-oauth-1" defer></script>
 </head>
 <body>
@@ -29,10 +30,18 @@
         <form id="addressForm" class="address-form" role="search">
           <span class="address-security" title="Schoolmathtime proxy" aria-hidden="true">◈</span>
           <label class="sr-only" for="browserAddress">Search or enter an address</label>
-          <input id="browserAddress" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search Google or enter a URL">
+          <input id="browserAddress" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search the web or enter a URL">
           <button class="address-go" type="submit">Go <span aria-hidden="true">↵</span></button>
         </form>
         <button id="bookmarkButton" class="chrome-icon-button bookmark-button" type="button" title="Bookmark this page" aria-label="Bookmark this page">☆</button>
+        <label class="toolbar-select-label" for="searchEngineSelect">Search</label>
+        <select id="searchEngineSelect" class="toolbar-select" aria-label="Default search engine">
+          <option value="duckduckgo">DuckDuckGo</option><option value="google">Google</option><option value="bing">Bing</option><option value="brave">Brave</option><option value="yahoo">Yahoo</option><option value="ecosia">Ecosia</option><option value="startpage">Startpage</option>
+        </select>
+        <label class="toolbar-select-label theme-select-label" for="themeSelect">Color</label>
+        <select id="themeSelect" class="toolbar-select theme-select" aria-label="Browser color theme">
+          <option value="light">Light</option><option value="dark">Dark</option><option value="blue">Blue</option><option value="rose">Rose</option><option value="green">Green</option>
+        </select>
         <button id="browserMenuButton" class="chrome-icon-button menu-button" type="button" title="Browser information" aria-label="Browser information">⋮</button>
       </div>
       <div id="browserNotice" class="browser-notice" role="status" aria-live="polite" hidden></div>
@@ -42,16 +51,32 @@
       <section id="appPanel" class="start-page home-view" aria-labelledby="appTitle">
         <div class="home-content">
           <div class="home-logo" aria-hidden="true"><span>S</span></div>
-          <h1 id="appTitle">schoolmathtime<span>.</span></h1>
-          <p class="home-tagline">A little space to explore.</p>
+          <h1 id="appTitle" class="google-wordmark">schoolmathtime</h1>
+          <p class="home-tagline">Search the web</p>
           <form id="browseForm" class="home-search-form" role="search">
             <label class="sr-only" for="targetInput">Search or enter a website</label>
             <span class="home-search-icon" aria-hidden="true">⌕</span>
-            <input id="targetInput" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search Google or enter a URL…">
+            <input id="targetInput" name="url" type="text" autocomplete="url" spellcheck="false" placeholder="Search the web or enter a URL…">
             <button id="clearSearchButton" class="clear-search-button" type="button" aria-label="Clear search">×</button>
             <button class="search-submit" type="submit" aria-label="Go">→</button>
           </form>
-          <p class="home-hint">Search Google or enter a website address. Pages and media open here.</p>
+          <div class="home-search-actions">
+            <button type="submit" form="browseForm" class="home-search-action">Search the web</button>
+            <button type="button" id="luckyButton" class="home-search-action">I’m Feeling Curious</button>
+          </div>
+          <label class="home-engine-choice" for="searchEngineSelect">DuckDuckGo is the default. Change the search engine from the toolbar above.</label>
+          <p class="home-hint">Enter a search or website address. Pages open here in Schoolmathtime.</p>
+
+
+
+          <div class="bookmark-section">
+            <div class="section-caption"><span>QUICK ACCESS</span><span class="caption-line"></span></div>
+            <div id="domainList" class="shortcut-grid"><span class="muted">Loading websites…</span></div>
+          </div>
+          <div id="savedSection" class="bookmark-section saved-section" hidden>
+            <div class="section-caption"><span>YOUR BOOKMARKS</span><span class="caption-line"></span></div>
+            <div id="savedList" class="shortcut-grid"></div>
+          </div>
 
           <section class="youtube-search-panel" aria-labelledby="youtubeSearchTitle">
             <div class="youtube-account" aria-label="Official YouTube account connection">
@@ -80,15 +105,6 @@
             <p id="youtubeSearchStatus" class="youtube-search-status" role="status" aria-live="polite">Search uses the official YouTube Data API. Playback uses the normal proxied watch page.</p>
             <div id="youtubeSearchResults" class="youtube-search-results"></div>
           </section>
-
-          <div class="bookmark-section">
-            <div class="section-caption"><span>QUICK ACCESS</span><span class="caption-line"></span></div>
-            <div id="domainList" class="shortcut-grid"><span class="muted">Loading websites…</span></div>
-          </div>
-          <div id="savedSection" class="bookmark-section saved-section" hidden>
-            <div class="section-caption"><span>YOUR BOOKMARKS</span><span class="caption-line"></span></div>
-            <div id="savedList" class="shortcut-grid"></div>
-          </div>
         </div>
       </section>
     </section>
