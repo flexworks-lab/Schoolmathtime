@@ -50,11 +50,11 @@ jobs:
           grep -q 'code_challenge_method: "S256"' src/server.js
           grep -q 'GOOGLE_YOUTUBE_READONLY_SCOPE' src/server.js
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'Ultraviolet'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'auto-browser-2'
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'auto-browser-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'browser-themes-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'browser-themes-2'
           curl --fail --silent http://127.0.0.1:3917/uv/uv.config.js | grep -q 'stm-uv-youtube-layout'
-          grep -q 'id="uv-youtube-login"' public/ultraviolet.html
-          grep -q 'accounts.google.com/ServiceLogin' public/ultraviolet.js
+          ! grep -q 'id="uv-youtube-login"' public/ultraviolet.html
+          ! grep -q 'accounts.google.com/ServiceLogin' public/ultraviolet.js
           grep -q 'Google blocked sign-in in this proxied browser' public/ultraviolet.js
           node - <<'NODE'
           const assert = require("node:assert/strict");
@@ -102,7 +102,7 @@ jobs:
           grep -q 'readRewrittenPageCache(rewrittenCacheKey)' src/server.js
           grep -q 'isLargeStaticAsset' src/server.js
           grep -q 'if (!transportReady)' public/ultraviolet.js
-          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'auto-browser-2'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'browser-themes-2'
           ! grep -q 'await navigator.serviceWorker.ready' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/uv/sw.js > /dev/null
           curl --fail --silent http://127.0.0.1:3917/uv/uv.bundle.js > /dev/null
@@ -128,6 +128,12 @@ jobs:
           grep -q 'function handleRoutedFailure(engine, reason)' public/ultraviolet.js
           grep -q 'transportFallbackTried' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-engine-mode"'
+          curl --fail --silent http://127.0.0.1:3917/index.html | grep -q 'id="searchEngineSelect"'
+          curl --fail --silent http://127.0.0.1:3917/index.html | grep -q 'id="themeSelect"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-search-engine"'
+          curl --fail --silent http://127.0.0.1:3917/ultraviolet.html | grep -q 'id="uv-theme-mode"'
+          grep -q 'return engines\[searchEngine\] || engines.duckduckgo' public/app.js
+          grep -q 'return engines\[searchEngine\] || engines.duckduckgo' public/ultraviolet.js
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"libcurl":true'
           curl --fail --silent http://127.0.0.1:3917/health | grep -q '"scramjet":true'
           curl --fail --silent http://127.0.0.1:3917/ultraviolet.js | grep -q 'wisp_v2: true'
