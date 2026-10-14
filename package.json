@@ -21,6 +21,7 @@
     "ipaddr.js": "2.2.0",
     "@mercuryworkshop/bare-mux": "2.1.9",
     "@mercuryworkshop/epoxy-transport": "2.1.28",
+    "@mercuryworkshop/libcurl-transport": "1.5.2",
     "@titaniumnetwork-dev/ultraviolet": "3.2.10",
     "@mercuryworkshop/wisp-js": "0.5.0"
   }
