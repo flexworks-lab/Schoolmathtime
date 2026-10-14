@@ -31,11 +31,8 @@ body.classic-active .uv-stage{flex:1;min-height:0}
 @media(max-width:700px){.uv-toolbar{gap:5px;padding:7px}.uv-brand{font-size:12px;margin-right:1px}.uv-icon{min-width:31px;padding:0 7px}.uv-home{padding:0 8px}.uv-address-form button{padding:0 10px}.uv-status-row{align-items:flex-start;flex-direction:column;padding:7px 10px}.uv-actions{align-self:flex-end}}
 @media(max-width:700px){.uv-youtube-login{min-height:31px;padding:0 6px;font-size:10px}.uv-address-form{flex:1;min-width:70px}.uv-address-form input{padding:8px 7px}}
 
-.uv-engine-switch{position:absolute;right:12px;bottom:12px;z-index:5;border:1px solid #343844;border-radius:10px;background:#dce2ec;color:#1a1d24;padding:9px 12px;font-size:12px;font-weight:750;box-shadow:0 3px 14px #0005}
-.uv-engine-switch:hover{background:#fff}
 
-/* Engine and transport recovery are automatic; do not expose manual toggles. */
-#uv-engine-switch{display:none!important}
+/* Engine and transport recovery are automatic; no manual toggles are rendered. */
 .uv-library{position:relative;flex-shrink:0}
 .uv-library>summary{list-style:none;cursor:pointer;display:flex;align-items:center;min-height:36px;padding:0 11px;border:1px solid var(--line);border-radius:9px;background:var(--button);color:var(--text);white-space:nowrap}
 .uv-library>summary::-webkit-details-marker{display:none}
