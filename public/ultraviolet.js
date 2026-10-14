@@ -31,6 +31,18 @@
     setStatus("Neither browser engine could open this page. The error text is selectable.");
   }
 
+  // Some Wisp handshakes can stall instead of rejecting. Bound transport setup
+  // so the classic route remains usable and a later navigation can reconnect.
+  function withTimeout(promise, timeoutMs, message) {
+    let timer;
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]).finally(() => window.clearTimeout(timer));
+  }
+
   function makeTarget(value) {
     const input = String(value || "").trim();
     if (!input) throw new Error("Enter a website address or search term.");
@@ -60,9 +72,13 @@
     // MuxTaskEnded. Set the transport before the service worker becomes ready,
     // as recommended by BareMux, so its first proxied request has a live client.
     if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js?v=bare-mux-2-1-9");
-    const transport = "/epoxy/index.mjs?build=wisp-mux-reset-1";
+    const transport = "/epoxy/index.mjs?build=wisp-mux-reset-2";
     const wispUrl = "wss://" + location.host + "/wisp/";
-    await connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]);
+    await withTimeout(
+      connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]),
+      12000,
+      "The Wisp transport did not initialize within 12 seconds. Check the /wisp/ WebSocket endpoint and TLS configuration."
+    );
 
     // The worker is deliberately scoped to /uv/, which covers proxied
     // iframe URLs but not /ultraviolet.html itself. Do not await
@@ -107,7 +123,11 @@
   function ensureTransport() {
     if (!transportReady) {
       transportReady = initializeTransport().catch((error) => {
+        // Drop the connection wrapper after a failed initialization. The next
+        // navigation will create a fresh BareMuxConnection and call setTransport
+        // again instead of reusing a wrapper whose transport may have died.
         transportReady = null;
+        connection = null;
         throw error;
       });
     }
@@ -154,7 +174,10 @@
 
   function failCandidate(attempt, engine, reason) {
     if (raceAttempt !== attempt || attempt.finished || !attempt.pending[engine]) return;
-    if (engine === "uv") transportReady = null;
+    if (engine === "uv") {
+      transportReady = null;
+      connection = null;
+    }
     attempt.pending[engine] = false;
     attempt.failures[engine] = String(reason || "The route failed to load.").slice(0, 900);
     finishIfBothFailed(attempt);
