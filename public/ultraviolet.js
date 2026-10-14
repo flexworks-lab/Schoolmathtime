@@ -16,6 +16,12 @@
   const copyError = byId("uv-copy-error");
   const bookmark = byId("uv-bookmark");
   const youtubeLogin = byId("uv-youtube-login");
+  const engineModeSelect = byId("uv-engine-mode");
+  const ENGINE_MODE_KEY = "schoolmathtime.engineMode";
+  let engineMode = "auto";
+  try { engineMode = localStorage.getItem(ENGINE_MODE_KEY) || "auto"; } catch {}
+  if (!["auto", "uv", "classic"].includes(engineMode)) engineMode = "auto";
+  if (engineModeSelect) engineModeSelect.value = engineMode;
   const stage = document.querySelector(".uv-stage");
   const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
   const HISTORY_KEY = "schoolmathtime.history";
@@ -254,7 +260,7 @@
       history.pushState({ target }, "", "/ultraviolet.html?url=" + encodeURIComponent(target));
     }
 
-    const preferred = preferredEngineFor(target);
+    const preferred = engineMode === "auto" ? preferredEngineFor(target) : engineMode;
     const hostname = new URL(target).hostname;
     const context = {
       target,
@@ -683,6 +689,14 @@
     bookmark.setAttribute("aria-pressed", String(saved));
     renderLibrary();
   }
+
+  engineModeSelect?.addEventListener("change", () => {
+    engineMode = ["auto", "uv", "classic"].includes(engineModeSelect.value) ? engineModeSelect.value : "auto";
+    try { localStorage.setItem(ENGINE_MODE_KEY, engineMode); } catch {}
+    const target = currentTarget();
+    if (target) void openTarget(target, false);
+    else setStatus(engineMode === "auto" ? "Automatic engine routing enabled." : "Preferred engine set to " + (engineMode === "uv" ? "Ultraviolet" : "Classic") + ". Automatic fallback remains enabled.");
+  });
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
