@@ -13,6 +13,8 @@
   const copyError = byId("uv-copy-error");
   const bookmark = byId("uv-bookmark");
   const youtubeLogin = byId("uv-youtube-login");
+  const scramjetButton = byId("uv-scramjet");
+  const stage = document.querySelector(".uv-stage");
   const BOOKMARKS_KEY = "schoolmathtime.bookmarks";
   let connection = null;
   let lastTarget = "";
@@ -21,6 +23,9 @@
   let raceSerial = 0;
   let raceAttempt = null;
   let transportReady = null;
+  let scramjetController = null;
+  let scramjetFrame = null;
+  let scramjetLoading = null;
 
   function setStatus(message) { status.textContent = message; }
   function setError(message) {
@@ -201,6 +206,7 @@
     classicFrame.classList.add("race-hidden");
     frame.style.display = "block";
     classicFrame.style.display = "block";
+    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
     welcome.style.display = "flex";
     const details = ["Ultraviolet: " + (attempt.failures.uv || "no usable response"),
       "Classic: " + (attempt.failures.classic || "no usable response")].join("\n");
@@ -238,6 +244,7 @@
     engineSwitch.hidden = engine !== "classic";
     hasLoaded = true;
     document.body.classList.toggle("classic-active", engine === "classic");
+    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
     winner.style.display = "block";
     winner.classList.remove("race-hidden");
     loser.classList.add("race-hidden");
@@ -261,6 +268,13 @@
     let target;
     try { target = makeTarget(value); }
     catch (err) { setError(err.message || err); return; }
+
+    // Keep the experimental engine selected while the user is navigating
+    // within it; switch back to Ultraviolet from the engine-switch control.
+    if (activeEngine === "scramjet") {
+      void openScramjet(target, pushState);
+      return;
+    }
 
     // YouTube is substantially more JavaScript-heavy than the classic fetch
     // proxy. Prefer Ultraviolet for YouTube and Google sign-in routes so the
@@ -300,6 +314,7 @@
     classicFrame.style.display = "block";
     frame.classList.add("race-hidden");
     classicFrame.classList.add("race-hidden");
+    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
     frame.dataset.expectedSrc = "";
     classicFrame.dataset.expectedSrc = "";
     frame.src = "about:blank";
@@ -341,6 +356,7 @@
   }
 
   function currentTarget() {
+    if (activeEngine === "scramjet") return lastTarget;
     if (activeEngine === "classic") {
       try {
         const childUrl = new URL(classicFrame.contentWindow.location.href);
@@ -382,6 +398,7 @@
     welcome.style.display = "none";
     engineSwitch.hidden = engine !== "classic";
     document.body.classList.toggle("classic-active", engine === "classic");
+    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
     winner.style.display = "block";
     winner.classList.add("race-hidden");
     loser.style.display = "block";
@@ -415,6 +432,120 @@
         setError(err && err.stack ? err.stack : err);
       }
     })();
+  }
+
+  async function loadScramjetRuntime() {
+    if (scramjetController) return scramjetController;
+    if (scramjetLoading) return scramjetLoading;
+
+    scramjetLoading = (async () => {
+      if (typeof window.$scramjetLoadController !== "function") {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "/scram/scramjet.all.js?v=scramjet-1-1-0";
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error("Scramjet's browser bundle did not load from /scram/."));
+          document.head.appendChild(script);
+        });
+      }
+      if (typeof window.$scramjetLoadController !== "function") {
+        throw new Error("Scramjet's controller export was not found after loading its bundle.");
+      }
+
+      const { ScramjetController } = window.$scramjetLoadController();
+      const controller = new ScramjetController({
+        files: {
+          wasm: "/scram/scramjet.wasm.wasm",
+          all: "/scram/scramjet.all.js",
+          sync: "/scram/scramjet.sync.js"
+        }
+      });
+      await withTimeout(
+        Promise.resolve(controller.init()),
+        15000,
+        "Scramjet did not finish initialization within 15 seconds."
+      );
+      scramjetController = controller;
+      return controller;
+    })();
+
+    try {
+      return await scramjetLoading;
+    } catch (error) {
+      scramjetLoading = null;
+      throw error;
+    }
+  }
+
+  async function openScramjet(value, pushState = true) {
+    let target;
+    try { target = makeTarget(value || currentTarget() || lastTarget || address.value); }
+    catch (error) { setError(error.message || error); return; }
+
+    if (raceAttempt?.timer) window.clearTimeout(raceAttempt.timer);
+    if (raceAttempt) raceAttempt.finished = true;
+    raceAttempt = null;
+    const switchId = ++raceSerial;
+    activeEngine = "scramjet";
+    lastTarget = target;
+    address.value = target;
+    hasLoaded = false;
+    error.hidden = true;
+    copyError.hidden = true;
+    welcome.style.display = "none";
+    engineSwitch.hidden = false;
+    document.body.classList.remove("classic-active");
+    frame.style.display = "none";
+    classicFrame.style.display = "none";
+    frame.classList.add("race-hidden");
+    classicFrame.classList.add("race-hidden");
+    if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
+
+    if (pushState) {
+      history.pushState({ target }, "", "/ultraviolet.html?url=" + encodeURIComponent(target));
+    }
+    setStatus("Preparing Scramjet for " + new URL(target).hostname + "…");
+
+    try {
+      // Configure BareMux before registering the service worker, matching the
+      // upstream Scramjet app's initialization order.
+      await ensureTransport();
+      if (switchId !== raceSerial || activeEngine !== "scramjet") return;
+      const controller = await loadScramjetRuntime();
+      if (switchId !== raceSerial || activeEngine !== "scramjet") return;
+      if (!navigator.serviceWorker) {
+        throw new Error("This browser does not support service workers. Use Schoolmathtime over HTTPS.");
+      }
+      await withTimeout(
+        navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }),
+        15000,
+        "Scramjet's service worker did not register within 15 seconds."
+      );
+      if (switchId !== raceSerial || activeEngine !== "scramjet") return;
+
+      if (!scramjetFrame) {
+        scramjetFrame = controller.createFrame();
+        scramjetFrame.frame.id = "scramjet-frame";
+        scramjetFrame.frame.title = "Scramjet browser";
+        scramjetFrame.frame.classList.add("race-hidden");
+        stage.appendChild(scramjetFrame.frame);
+      }
+      scramjetFrame.frame.style.display = "block";
+      scramjetFrame.frame.classList.remove("race-hidden");
+      scramjetFrame.go(target);
+      hasLoaded = true;
+      setStatus("Opened " + new URL(target).hostname + " with Scramjet (experimental).");
+      refreshBookmarkState();
+    } catch (error) {
+      if (switchId !== raceSerial) return;
+      activeEngine = "";
+      engineSwitch.hidden = true;
+      if (scramjetFrame?.frame) scramjetFrame.frame.style.display = "none";
+      welcome.style.display = "flex";
+      setError("Scramjet could not open " + new URL(target).hostname + ".\n" +
+        String(error && error.stack ? error.stack : error).slice(0, 1800));
+    }
   }
 
   function isYouTubeOrGoogleSignin(value) {
@@ -473,15 +604,17 @@
   });
   byId("uv-back").addEventListener("click", () => {
     try {
-      const activeFrame = activeEngine === "classic" ? classicFrame : frame;
-      if (activeEngine) activeFrame.contentWindow.history.back();
+      const activeFrame = activeEngine === "classic" ? classicFrame :
+        activeEngine === "scramjet" ? scramjetFrame?.frame : frame;
+      if (activeEngine && activeFrame) activeFrame.contentWindow.history.back();
       else history.back();
     } catch { history.back(); }
   });
   byId("uv-forward").addEventListener("click", () => {
     try {
-      const activeFrame = activeEngine === "classic" ? classicFrame : frame;
-      if (activeEngine) activeFrame.contentWindow.history.forward();
+      const activeFrame = activeEngine === "classic" ? classicFrame :
+        activeEngine === "scramjet" ? scramjetFrame?.frame : frame;
+      if (activeEngine && activeFrame) activeFrame.contentWindow.history.forward();
       else history.forward();
     } catch { history.forward(); }
   });
@@ -492,9 +625,26 @@
   });
   byId("uv-classic").addEventListener("click", () => {
     const target = currentTarget() || lastTarget || address.value.trim();
-    if (!target) { location.assign("/"); return; }
-    location.assign("/browse?url=" + encodeURIComponent(target));
+    if (target) openSingleEngine("classic", target);
+    else location.assign("/");
   });
+  scramjetButton?.addEventListener("click", () => {
+    const target = currentTarget() || lastTarget || address.value.trim();
+    if (target) void openScramjet(target);
+  });
+  void fetch("/health", { cache: "no-store" })
+    .then((response) => response.ok ? response.json() : Promise.reject(new Error("Health check failed")))
+    .then((health) => {
+      if (scramjetButton) {
+        scramjetButton.disabled = !health.scramjet;
+        scramjetButton.title = health.scramjet
+          ? "Try the experimental Scramjet engine"
+          : "Scramjet assets are unavailable on this server";
+      }
+    })
+    .catch(() => {
+      if (scramjetButton) scramjetButton.title = "Scramjet availability could not be checked; you may still try it";
+    });
   bookmark.addEventListener("click", () => {
     const target = currentTarget() || lastTarget;
     if (!target) { setStatus("Open a page before bookmarking it."); return; }
