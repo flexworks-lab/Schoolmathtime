@@ -52,13 +52,15 @@ The homepage address bar and YouTube search results use the Ultraviolet service-
 
 The Wisp transport is limited to TCP port 443, denies direct IP targets and private/loopback addresses, and applies `ALLOWED_HOSTS` as a hostname allowlist when an explicit allowlist is configured. This does not guarantee that all websites or videos will work. Schoolmathtime's `/health` endpoint includes an `ultraviolet` boolean so deployment readiness can be checked.
 
+Ultraviolet transport initialization is time-bounded: if `setTransport` does not complete within 12 seconds, the route reports a specific Wisp/TLS setup error and the next navigation can create a fresh BareMux connection wrapper. The existing classic proxy remains available as a fallback.
+
 **Compatibility note:** Ultraviolet-App is marked as superseded by Scramjet by its maintainers. This integration is an experimental test of Ultraviolet, not a promise of compatibility with every browser or YouTube's anti-abuse systems. If the Wisp connection is unavailable or a website refuses the request, use the classic browser or the website's supported access method.
 
 ## Video, JavaScript, and security
 
 YouTube search is backed by the official Data API. Search-result clicks open the native YouTube watch URL in the Ultraviolet-based browser shell inside Schoolmathtime, without an external redirect or YouTube iframe player. Ultraviolet uses a browser service worker and Wisp transport instead of the classic server-side HTML fetch, but YouTube can still restrict playback based on its policies, IP reputation, or network controls.
 
-Supported video embeds (including Vimeo, Twitch, Dailymotion, Spotify, SoundCloud, Loom, TikTok, and Bilibili) can run in their own frames. HTML5 audio/video sources use a streaming route with byte-range support. Playback still depends on provider rules, CORS, browser APIs, licensing, age restrictions, and whether the uploader permits embedding. No generic proxy can make every site behave exactly as it does on its native origin.
+Supported video embeds (including Vimeo, Twitch, Dailymotion, Spotify, SoundCloud, Loom, TikTok, and Bilibili) can run in their own frames. HTML5 audio/video sources use a streaming route with byte-range support. The route forwards bounded, syntactically valid byte-range requests, supports origin `206 Partial Content` and `416 Range Not Satisfiable` responses, and preserves `Content-Range` and `Content-Length` when provided. It advertises `Accept-Ranges: bytes` only when the origin confirms support or returns a partial response. Playback still depends on provider rules, CORS, browser APIs, licensing, age restrictions, and whether the uploader permits embedding. No generic proxy can make every site behave exactly as it does on its native origin.
 
 Some site JavaScript, forms, service workers, protected playback, and origin-locked APIs may not work correctly. Since the passkey is removed, the service is public; set `ALLOWED_HOSTS` to a short trusted domain list if it should not browse the entire public web. Keep HTTPS/IP validation and rate limiting enabled. Do not use the proxy for sensitive accounts or private data; third-party page scripts execute in this proxy session. The proxy does not bypass a destination site's access controls.
 
