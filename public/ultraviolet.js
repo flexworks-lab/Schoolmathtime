@@ -71,14 +71,50 @@
     // the underlying Wisp multiplexor has died, which leaves retries stuck on
     // MuxTaskEnded. Set the transport before the service worker becomes ready,
     // as recommended by BareMux, so its first proxied request has a live client.
-    if (!connection) connection = new BareMux.BareMuxConnection("/baremux/worker.js?v=bare-mux-2-1-9");
-    const transport = "/epoxy/index.mjs?build=wisp-mux-reset-2";
     const wispUrl = "wss://" + location.host + "/wisp/";
-    await withTimeout(
-      connection.setTransport(transport, [{ wisp: wispUrl, wisp_v2: true }]),
-      12000,
-      "The Wisp transport did not initialize within 12 seconds. Check the /wisp/ WebSocket endpoint and TLS configuration."
-    );
+    const transportCandidates = [
+      {
+        id: "epoxy",
+        name: "Epoxy",
+        url: "/epoxy/index.mjs?build=wisp-mux-reset-3",
+        options: [{ wisp: wispUrl, wisp_v2: true }]
+      },
+      {
+        id: "libcurl",
+        name: "Libcurl",
+        url: "/libcurl/index.mjs?build=libcurl-fallback-1",
+        options: [{ websocket: wispUrl }]
+      }
+    ];
+    const transportFailures = [];
+    let selectedTransport = "";
+
+    // Try the primary transport first. If its module or Wisp handshake cannot
+    // initialize, create a separate BareMux worker for Libcurl and try again.
+    for (const candidate of transportCandidates) {
+      try {
+        connection = new BareMux.BareMuxConnection(
+          "/baremux/worker.js?v=bare-mux-2-1-9&transport=" + candidate.id
+        );
+        await withTimeout(
+          connection.setTransport(candidate.url, candidate.options),
+          12000,
+          candidate.name + " transport did not initialize within 12 seconds."
+        );
+        selectedTransport = candidate.name;
+        break;
+      } catch (error) {
+        transportFailures.push(candidate.name + ": " + String(error && error.message ? error.message : error));
+        connection = null;
+      }
+    }
+
+    if (!selectedTransport || !connection) {
+      throw new Error(
+        "Neither Epoxy nor Libcurl could initialize. Check the /wisp/ WebSocket endpoint, TLS configuration, and transport assets.\\n" +
+        transportFailures.join("\\n")
+      );
+    }
 
     // The worker is deliberately scoped to /uv/, which covers proxied
     // iframe URLs but not /ultraviolet.html itself. Do not await
